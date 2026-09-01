@@ -14,4 +14,15 @@
 
 #![forbid(unsafe_code)]
 
+mod api;
+mod client;
+pub mod discovery;
+mod error;
 pub mod media;
+mod tls;
+mod transport;
+
+pub use client::{Camera, CameraConfig};
+pub use error::{Error, Result, describe_code};
+pub use tls::CertFingerprint;
+pub use transport::PasswordHash;
