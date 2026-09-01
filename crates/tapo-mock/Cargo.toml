@@ -1,0 +1,15 @@
+[package]
+name = "tapo-mock"
+description = "A fake Tapo camera (control API and media stream) for tests and UI development"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+tapo-camera.workspace = true
+
+[lints]
+workspace = true

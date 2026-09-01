@@ -1,0 +1,17 @@
+//! Unofficial Rust client for TP-Link Tapo cameras.
+//!
+//! Talks to cameras on the local network only: the control API (device info, SD-card
+//! recordings, detection events), the media stream used for live view, playback and
+//! downloads, and helpers to turn that stream into playable video.
+//!
+//! This crate is a port of [pytapo](https://github.com/JurajNyiri/pytapo) and borrows
+//! from other MIT-licensed community work; see `NOTICE` in the repository.
+//!
+//! **Disclaimer:** this project is not affiliated with, endorsed by, or supported by
+//! TP-Link. "Tapo" and "TP-Link" are trademarks of their respective owners. It only
+//! uses the cameras' local interfaces for interoperability, with credentials the user
+//! owns, and comes with no warranty.
+
+#![forbid(unsafe_code)]
+
+pub mod media;

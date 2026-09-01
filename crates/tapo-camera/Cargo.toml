@@ -1,0 +1,21 @@
+[package]
+name = "tapo-camera"
+description = "Unofficial client for TP-Link Tapo cameras: local control API, SD-card recordings and media streams (a Rust port of pytapo)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+readme = "README.md"
+keywords = ["tapo", "tp-link", "camera", "nvr", "mpeg-ts"]
+categories = ["api-bindings", "multimedia::video", "network-programming"]
+
+[dependencies]
+bytes.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true

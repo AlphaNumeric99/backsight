@@ -1,0 +1,28 @@
+[package]
+name = "backsight"
+description = "Backsight — a desktop viewer for Tapo cameras"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[lib]
+# The `_lib` suffix keeps the lib name distinct from the bin name,
+# see https://github.com/rust-lang/cargo/issues/8519
+name = "backsight_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde.workspace = true
+serde_json.workspace = true
+tapo-camera.workspace = true
+
+[lints]
+workspace = true

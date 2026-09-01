@@ -1,0 +1,11 @@
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.icns binary
+*.jpg binary
+*.mp4 binary
+# MPEG-TS fixtures (not TypeScript), raw H.264/H.265 and Backsight packet dumps
+*.mpegts binary
+*.h264 binary
+*.h265 binary
+*.bspk binary

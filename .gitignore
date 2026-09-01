@@ -1,0 +1,29 @@
+# Rust
+/target/
+
+# Node / Vite
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Tauri generated
+/app/src-tauri/gen/schemas
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editors / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.sw?
+
+# Local-only reference material (TP-Link screenshots etc. must never be committed)
+design-ref/
+
+# Scratch output from manual testing
+/scratch/
