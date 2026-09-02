@@ -19,6 +19,7 @@ mod client;
 pub mod discovery;
 mod error;
 pub mod media;
+pub mod stream;
 mod tls;
 mod transport;
 
