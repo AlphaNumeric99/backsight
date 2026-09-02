@@ -188,6 +188,15 @@ pub enum StreamRequest {
         end: i64,
         player_id: String,
     },
+    /// The JPEG thumbnail the camera keeps for the detection recording starting at
+    /// `start`: one `image/jpeg` part, then "finished". Continuous recordings have none
+    /// (the camera then stays silent). A media session keeps the media type of its first
+    /// request, so fetch thumbnails on a session of their own.
+    Thumbnail {
+        client_id: u64,
+        start: i64,
+        player_id: String,
+    },
 }
 
 impl StreamRequest {
@@ -228,6 +237,20 @@ impl StreamRequest {
                     "media_type": 0,
                     "start_time": start.to_string(),
                     "end_time": end.to_string(),
+                    "player_id": player_id,
+                },
+                "method": "get",
+            }),
+            Self::Thumbnail {
+                client_id,
+                start,
+                player_id,
+            } => json!({
+                "download": {
+                    "client_id": client_id,
+                    "channels": [0],
+                    "media_type": 2,
+                    "start_time": start.to_string(),
                     "player_id": player_id,
                 },
                 "method": "get",

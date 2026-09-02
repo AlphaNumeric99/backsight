@@ -18,11 +18,20 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
-tauri-plugin-opener = "2"
+getrandom = "0.4"
+hex = "0.4"
+jiff = "0.2"
+keyring = { version = "4.2", features = ["v1"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
 serde.workspace = true
 serde_json.workspace = true
 tapo-camera.workspace = true
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
 
 [lints]
 workspace = true
