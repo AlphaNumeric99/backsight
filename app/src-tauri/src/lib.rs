@@ -7,14 +7,51 @@ mod error;
 mod model;
 mod recordings;
 mod secrets;
+mod thumbnails;
 
 use std::sync::Arc;
 
 use tauri::Manager;
+use tauri::http::{Response, StatusCode, header};
 
 use crate::cameras::CameraManager;
 use crate::commands::AppState;
 use crate::db::Db;
+use crate::thumbnails::Thumbnails;
+
+/// Serves `thumb://<camera>/<start>` from the thumbnail cache or the camera.
+fn thumbnail_protocol(
+    ctx: tauri::UriSchemeContext<'_, tauri::Wry>,
+    request: tauri::http::Request<Vec<u8>>,
+    responder: tauri::UriSchemeResponder,
+) {
+    let app = ctx.app_handle().clone();
+    let path = request.uri().path().to_owned();
+    tauri::async_runtime::spawn(async move {
+        let not_found = || {
+            Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body(Vec::new())
+                .expect("response")
+        };
+        let Some((camera_id, start)) = thumbnails::parse_path(&path) else {
+            return responder.respond(not_found());
+        };
+        let Some(state) = app.try_state::<AppState>() else {
+            return responder.respond(not_found());
+        };
+        match state.thumbnails.get(&camera_id, start).await {
+            Some(jpeg) => responder.respond(
+                Response::builder()
+                    .header(header::CONTENT_TYPE, "image/jpeg")
+                    .header(header::CACHE_CONTROL, "max-age=31536000, immutable")
+                    .body(jpeg)
+                    .expect("response"),
+            ),
+            None => responder.respond(not_found()),
+        }
+    });
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -27,6 +64,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .register_asynchronous_uri_scheme_protocol(thumbnails::SCHEME, thumbnail_protocol)
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
@@ -34,9 +72,14 @@ pub fn run() {
             let cameras =
                 CameraManager::start(app.handle().clone(), db.clone()).map_err(|e| e.message)?;
             let default_export_dir = commands::default_export_dir(app.handle());
+            let thumbnails = Arc::new(Thumbnails::new(
+                app.path().app_cache_dir()?.join("thumbnails"),
+                cameras.clone(),
+            ));
             app.manage(AppState {
                 db,
                 cameras,
+                thumbnails,
                 default_export_dir,
             });
             Ok(())

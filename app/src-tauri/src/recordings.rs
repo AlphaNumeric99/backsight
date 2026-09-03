@@ -6,6 +6,7 @@ use crate::cameras::{CameraHandle, ClockInfo};
 use crate::db::Db;
 use crate::error::{ApiError, ApiResult};
 use crate::model::{DayIndex, DetectionEvent, RecordingKind, RecordingSegment};
+use crate::thumbnails;
 
 /// Past days rarely change; today's index is refreshed after this many seconds.
 const TODAY_CACHE_SECONDS: i64 = 60;
@@ -96,8 +97,9 @@ pub async fn day_index(handle: &CameraHandle, db: &Db, date: &str) -> ApiResult<
     if let Some((json, fetched_at)) = db.cached_day(&handle.id, date)?
         && (is_past_day || now - fetched_at < TODAY_CACHE_SECONDS)
         && let Ok(cached) = serde_json::from_str::<CachedDay>(&json)
+        && cached.version == CACHE_VERSION
     {
-        return Ok(cached.into_index(&handle.id, date));
+        return Ok(cached.into_index(&handle.id, date, clock));
     }
 
     let compact = day.strftime("%Y%m%d").to_string();
@@ -117,8 +119,9 @@ pub async fn day_index(handle: &CameraHandle, db: &Db, date: &str) -> ApiResult<
     };
 
     let cached = CachedDay {
-        segments: parse_segments(&recordings, clock),
-        events: parse_events(&events, clock),
+        version: CACHE_VERSION,
+        segments: parse_segments(&recordings),
+        events: parse_events(&events),
     };
     db.cache_day(
         &handle.id,
@@ -126,7 +129,7 @@ pub async fn day_index(handle: &CameraHandle, db: &Db, date: &str) -> ApiResult<
         &serde_json::to_string(&cached).expect("JSON"),
         now,
     )?;
-    Ok(cached.into_index(&handle.id, date))
+    Ok(cached.into_index(&handle.id, date, clock))
 }
 
 /// `searchVideoOfDay`, refreshing the playback user id once if the camera rejects it.
@@ -144,8 +147,15 @@ async fn fetch_recordings(handle: &CameraHandle, date: &str) -> tapo_camera::Res
     }
 }
 
+/// Bump when the cached layout or meaning changes.
+const CACHE_VERSION: u32 = 2;
+
+/// What the camera reported for a day, in camera-clock seconds (converted to UTC when
+/// read, with the current clock correction).
 #[derive(serde::Serialize, serde::Deserialize)]
 struct CachedDay {
+    #[serde(default)]
+    version: u32,
     segments: Vec<CachedSegment>,
     events: Vec<CachedEvent>,
 }
@@ -165,7 +175,8 @@ struct CachedEvent {
 }
 
 impl CachedDay {
-    fn into_index(self, camera_id: &str, date: &str) -> DayIndex {
+    fn into_index(self, camera_id: &str, date: &str, clock: ClockInfo) -> DayIndex {
+        let utc = |camera_seconds: i64| iso(camera_seconds + clock.correction);
         DayIndex {
             camera_id: camera_id.to_owned(),
             date: date.to_owned(),
@@ -173,8 +184,8 @@ impl CachedDay {
                 .segments
                 .into_iter()
                 .map(|s| RecordingSegment {
-                    start: iso(s.start),
-                    end: iso(s.end),
+                    start: utc(s.start),
+                    end: utc(s.end),
                     kind: if s.detection {
                         RecordingKind::Detection
                     } else {
@@ -187,10 +198,10 @@ impl CachedDay {
                 .into_iter()
                 .map(|e| DetectionEvent {
                     id: format!("{camera_id}-{}", e.start),
-                    start: iso(e.start),
-                    end: iso(e.end),
+                    start: utc(e.start),
+                    end: utc(e.end),
                     types: e.types,
-                    thumbnail_url: None,
+                    thumbnail_url: Some(thumbnails::url(camera_id, e.start)),
                 })
                 .collect(),
         }
@@ -198,7 +209,7 @@ impl CachedDay {
 }
 
 /// `searchVideoOfDay` results: single-key objects `{ "…": { startTime, endTime, vedio_type } }`.
-fn parse_segments(list: &Value, clock: ClockInfo) -> Vec<CachedSegment> {
+fn parse_segments(list: &Value) -> Vec<CachedSegment> {
     let mut segments: Vec<CachedSegment> = list
         .as_array()
         .into_iter()
@@ -218,8 +229,8 @@ fn parse_segments(list: &Value, clock: ClockInfo) -> Vec<CachedSegment> {
                 .and_then(parse_i64)
                 .unwrap_or(1);
             (end > start).then_some(CachedSegment {
-                start: start + clock.correction,
-                end: end + clock.correction,
+                start,
+                end,
                 detection: kind != 1,
             })
         })
@@ -257,7 +268,7 @@ fn collect_codes(value: &Value, out: &mut Vec<i64>) {
 }
 
 /// `searchDetectionList` results: `{ start_time, end_time, <type fields> }`.
-fn parse_events(list: &Value, clock: ClockInfo) -> Vec<CachedEvent> {
+fn parse_events(list: &Value) -> Vec<CachedEvent> {
     let mut events: Vec<CachedEvent> = list
         .as_array()
         .into_iter()
@@ -285,11 +296,7 @@ fn parse_events(list: &Value, clock: ClockInfo) -> Vec<CachedEvent> {
             if types.is_empty() {
                 types.push("motion".into());
             }
-            Some(CachedEvent {
-                start: start + clock.correction,
-                end: end + clock.correction,
-                types,
-            })
+            Some(CachedEvent { start, end, types })
         })
         .collect();
     events.sort_by_key(|e| e.start);
@@ -323,18 +330,18 @@ mod tests {
             { "search_video_results_1": { "startTime": 100, "endTime": 150, "vedio_type": 1 } },
             { "bad": { "startTime": 300, "endTime": 300 } }
         ]);
-        let segments = parse_segments(&list, CLOCK);
+        let segments = parse_segments(&list);
         assert_eq!(
             segments,
             vec![
                 CachedSegment {
-                    start: 110,
-                    end: 160,
+                    start: 100,
+                    end: 150,
                     detection: false
                 },
                 CachedSegment {
-                    start: 210,
-                    end: 270,
+                    start: 200,
+                    end: 260,
                     detection: true
                 },
             ]
@@ -348,11 +355,27 @@ mod tests {
             { "start_time": 400, "end_time": 410 },
             { "start_time": 500, "end_time": 530, "event_type": 8 }
         ]);
-        let events = parse_events(&list, CLOCK);
+        let events = parse_events(&list);
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].types, vec!["motion"]);
         assert_eq!(events[1].types, vec!["motion", "person"]);
-        assert_eq!(events[1].start, 510);
+        assert_eq!(events[1].start, 500);
+
+        // Converted to UTC with the clock correction when read, with thumbnails.
+        let index = CachedDay {
+            version: CACHE_VERSION,
+            segments: Vec::new(),
+            events,
+        }
+        .into_index("cam", "1970-01-01", CLOCK);
+        assert_eq!(index.events[1].start, "1970-01-01T00:08:30Z");
+        assert!(
+            index.events[1]
+                .thumbnail_url
+                .as_deref()
+                .unwrap()
+                .ends_with("/cam/500")
+        );
     }
 
     #[test]

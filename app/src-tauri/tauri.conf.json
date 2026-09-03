@@ -27,7 +27,7 @@
         "default-src": "'self'",
         "script-src": "'self'",
         "style-src": "'self' 'unsafe-inline'",
-        "img-src": "'self' asset: http://asset.localhost blob: data:",
+        "img-src": "'self' asset: http://asset.localhost thumb: http://thumb.localhost blob: data:",
         "media-src": "'self' blob:",
         "font-src": "'self' data:",
         "worker-src": "'self' blob:",

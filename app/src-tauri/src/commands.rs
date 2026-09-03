@@ -19,6 +19,7 @@ use crate::recordings;
 pub struct AppState {
     pub db: Arc<Db>,
     pub cameras: Arc<CameraManager>,
+    pub thumbnails: Arc<crate::thumbnails::Thumbnails>,
     pub default_export_dir: String,
 }
 
