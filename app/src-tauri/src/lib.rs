@@ -1,3 +1,5 @@
+#[allow(dead_code)] // used by exports, which land next
+mod audio_aac;
 mod cameras;
 mod commands;
 mod db;
