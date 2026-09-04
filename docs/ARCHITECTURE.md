@@ -54,6 +54,28 @@ discontinuity flag follows every seek.
 Implementations: `app/src-tauri/src/wire.rs` (encoder) and `app/src/player/wire.ts` (decoder)
 share the golden test vectors in `app/src/player/__fixtures__/`.
 
+## Backend (`app/src-tauri/src`)
+
+| Module | Role |
+|---|---|
+| `commands.rs` | Tauri commands behind `app/src/ipc/tauri.ts`; `AppState` |
+| `model.rs` | Serde types mirroring `api.ts` (camelCase JSON) |
+| `error.rs` | `ApiError { code, message, retryAt }` and the camera-error → UI-code mapping |
+| `cameras.rs` | Saved cameras, their clients, 60 s status polling, `backsight://event` events |
+| `recordings.rs` | Days with footage and the day index (segments + detection events), cached in SQLite |
+| `thumbnails.rs` | Detection thumbnails via the `thumb://<camera>/<start>` scheme, disk-cached |
+| `audio_aac.rs` | 48 kHz upsampling + AAC encoding (Media Foundation) for exports |
+| `db.rs` / `secrets.rs` | SQLite storage / OS keychain for passwords |
+
+**Time.** The camera's clock is not necessarily UTC. Every poll records
+`correction = host_utc_now − camera_seconds` and the camera's UTC offset (from its local wall
+time). Recording and event times are cached in camera-clock seconds and converted to UTC when
+served; requests back to the camera (playback start, thumbnails) use camera-clock seconds.
+
+**Credentials.** Passwords live only in the OS keychain (service `Backsight`). The certificate
+fingerprint seen when a camera is added is pinned in the database; a different certificate at
+the same address is refused.
+
 ## Camera constraints the backend must respect
 
 - Control requests go out one at a time per camera.
