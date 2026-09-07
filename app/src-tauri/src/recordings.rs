@@ -65,19 +65,25 @@ pub async fn days_with_recordings(handle: &CameraHandle, month: &str) -> ApiResu
     Ok(parse_days(&list))
 }
 
+/// `searchDateWithVideo` results: `[{ "search_results_1": { "date": "20260916" } }, …]`
+/// (flat `{ "date": … }` objects and plain strings are accepted too).
 pub fn parse_days(list: &Value) -> Vec<String> {
+    fn date_of(value: &Value) -> Option<String> {
+        match value {
+            Value::String(s) => Some(s.clone()),
+            Value::Number(n) => Some(n.to_string()),
+            Value::Object(o) => match o.get("date") {
+                Some(date) => date_of(date),
+                None => o.values().find_map(date_of),
+            },
+            _ => None,
+        }
+    }
     let mut days: Vec<String> = list
         .as_array()
         .into_iter()
         .flatten()
-        .filter_map(|item| match item {
-            Value::String(s) => Some(s.clone()),
-            Value::Object(o) => o.get("date").map(|d| match d {
-                Value::String(s) => s.clone(),
-                other => other.to_string(),
-            }),
-            _ => None,
-        })
+        .filter_map(date_of)
         .filter(|d| d.len() == 8)
         .map(|d| format!("{}-{}-{}", &d[..4], &d[4..6], &d[6..]))
         .collect();
@@ -267,7 +273,26 @@ fn collect_codes(value: &Value, out: &mut Vec<i64>) {
     }
 }
 
-/// `searchDetectionList` results: `{ start_time, end_time, <type fields> }`.
+/// Detection types in an `events_N` bitmask: bit `b` of `events_N` stands for type
+/// `(N - 1) * 32 + b + 1` (e.g. `events_1 = 162` = motion + person + vehicle).
+fn codes_from_bitmask(key: &str, mask: i64, out: &mut Vec<i64>) {
+    let Some(word) = key
+        .strip_prefix("events_")
+        .and_then(|n| n.parse::<i64>().ok())
+        .filter(|n| *n >= 1)
+    else {
+        return;
+    };
+    for bit in 0..32 {
+        if mask & (1 << bit) != 0 {
+            out.push((word - 1) * 32 + bit + 1);
+        }
+    }
+}
+
+/// `searchDetectionList` results, e.g.
+/// `{ "start_time": …, "end_time": …, "alarm_type": 6, "events_1": 162 }`: `alarm_type`
+/// is the main detection, `events_N` a bitmask of everything detected in the clip.
 fn parse_events(list: &Value) -> Vec<CachedEvent> {
     let mut events: Vec<CachedEvent> = list
         .as_array()
@@ -280,19 +305,38 @@ fn parse_events(list: &Value) -> Vec<CachedEvent> {
                 .and_then(parse_i64)
                 .filter(|e| *e >= start)
                 .unwrap_or(start);
-            let mut codes = Vec::new();
-            for key in ["event_type", "alarm_type", "video_type", "type"] {
+
+            let mut primary = Vec::new();
+            for key in ["alarm_type", "event_type", "video_type", "type"] {
                 if let Some(v) = event.get(key) {
-                    collect_codes(v, &mut codes);
+                    collect_codes(v, &mut primary);
                 }
             }
-            let mut types: Vec<String> = codes
-                .into_iter()
-                .filter(|c| *c != 1)
-                .map(|c| event_type_name(c).to_owned())
-                .collect();
-            types.sort();
-            types.dedup();
+            let mut detected = Vec::new();
+            if let Some(obj) = event.as_object() {
+                for (key, value) in obj {
+                    if let Some(mask) = parse_i64(value) {
+                        codes_from_bitmask(key, mask, &mut detected);
+                    }
+                }
+            }
+
+            // Main type first (the UI colours by it), then the rest in a stable order.
+            let mut types: Vec<String> = Vec::new();
+            for code in primary.into_iter().chain({
+                detected.sort_unstable();
+                detected
+            }) {
+                let name = event_type_name(code).to_owned();
+                if code != 1 && !types.contains(&name) {
+                    types.push(name);
+                }
+            }
+            // Smart detections (person, vehicle…) come with motion too; keep motion
+            // only when it's all there is.
+            if types.len() > 1 {
+                types.retain(|t| t != "motion");
+            }
             if types.is_empty() {
                 types.push("motion".into());
             }
@@ -313,6 +357,38 @@ mod tests {
         correction: 10,
         utc_offset_minutes: 330,
     };
+
+    #[test]
+    fn days_from_real_search_results() {
+        // Shape returned by a C325WB (firmware 1.4.4).
+        let list = json!([
+            { "search_results_1": { "date": "20260916" } },
+            { "search_results_2": { "date": "20260917" } }
+        ]);
+        assert_eq!(parse_days(&list), vec!["2026-09-16", "2026-09-17"]);
+    }
+
+    #[test]
+    fn events_decode_alarm_type_and_bitmask() {
+        // Real combinations seen on a C325WB: motion only, person, vehicle, all three.
+        let list = json!([
+            { "alarm_type": 2, "events_1": 2, "start_time": 100, "end_time": 110 },
+            { "alarm_type": 6, "events_1": 34, "start_time": 200, "end_time": 210 },
+            { "alarm_type": 8, "events_1": 130, "start_time": 300, "end_time": 310 },
+            { "alarm_type": 6, "events_1": 162, "start_time": 400, "end_time": 410 }
+        ]);
+        let events = parse_events(&list);
+        let types: Vec<_> = events.iter().map(|e| e.types.clone()).collect();
+        assert_eq!(
+            types,
+            vec![
+                vec!["motion".to_string()],
+                vec!["person".to_string()],
+                vec!["vehicle".to_string()],
+                vec!["person".to_string(), "vehicle".to_string()],
+            ]
+        );
+    }
 
     #[test]
     fn days_from_search_results() {
@@ -358,7 +434,7 @@ mod tests {
         let events = parse_events(&list);
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].types, vec!["motion"]);
-        assert_eq!(events[1].types, vec!["motion", "person"]);
+        assert_eq!(events[1].types, vec!["person"]);
         assert_eq!(events[1].start, 500);
 
         // Converted to UTC with the clock correction when read, with thumbnails.

@@ -471,6 +471,8 @@ fn parse_size(value: &Value) -> Option<u64> {
         (n, 1u64 << 20)
     } else if let Some(n) = text.strip_suffix("KB") {
         (n, 1u64 << 10)
+    } else if let Some(n) = text.strip_suffix('B') {
+        (n, 1)
     } else {
         (text.as_str(), 1u64 << 20)
     };
@@ -495,11 +497,18 @@ pub fn parse_storage(value: &Value) -> Option<StorageInfo> {
         "" | "offline" => "none",
         _ => "normal",
     };
+    // Prefer the exact byte counts ("244007829504B") over the rounded ones ("227.3GB").
+    let size = |key: &str| {
+        disk.get(&format!("{key}_accurate"))
+            .and_then(parse_size)
+            .or_else(|| disk.get(key).and_then(parse_size))
+            .unwrap_or(0)
+    };
     Some(StorageInfo {
         present: status != "none",
         status: status.into(),
-        total_bytes: disk.get("total_space").and_then(parse_size).unwrap_or(0),
-        free_bytes: disk.get("free_space").and_then(parse_size).unwrap_or(0),
+        total_bytes: size("total_space"),
+        free_bytes: size("free_space"),
         recording_mode: None,
     })
 }
@@ -520,6 +529,20 @@ mod tests {
         let info = parse_clock(&clock, host_now).unwrap();
         assert_eq!(info.correction, 5);
         assert_eq!(info.utc_offset_minutes, 330);
+    }
+
+    #[test]
+    fn storage_prefers_exact_sizes() {
+        // Trimmed from a C325WB's getSdCardStatus.
+        let sd = json!({ "harddisk_manage": { "hd_info": [ { "hd_info_1": {
+            "status": "normal", "detect_status": "normal", "loop_record_status": "1",
+            "total_space": "227.3GB", "total_space_accurate": "244007829504B",
+            "free_space": "37.2MB", "free_space_accurate": "38987620B"
+        } } ] } });
+        let info = parse_storage(&sd).unwrap();
+        assert_eq!(info.total_bytes, 244_007_829_504);
+        assert_eq!(info.free_bytes, 38_987_620);
+        assert_eq!(info.status, "normal");
     }
 
     #[test]
