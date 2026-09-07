@@ -1,8 +1,8 @@
 //! The port-8800 media server: Digest auth, key exchange, and encrypted multipart parts
 //! carrying the fixture video.
 
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -20,14 +20,19 @@ const TS_PACKET: usize = 188;
 /// 50 TS packets per part, about what cameras send.
 const PART_PACKETS: usize = 50;
 
+/// Digest nonces handed out, valid on any later connection (like real cameras).
+type Nonces = Arc<Mutex<HashSet<String>>>;
+
 pub async fn serve(listener: TcpListener, options: Arc<MockOptions>) {
+    let nonces: Nonces = Arc::default();
     loop {
         let Ok((tcp, _)) = listener.accept().await else {
             continue;
         };
         let options = options.clone();
+        let nonces = nonces.clone();
         tokio::spawn(async move {
-            if let Err(err) = handle(tcp, &options).await {
+            if let Err(err) = handle(tcp, &options, &nonces).await {
                 tracing::debug!(%err, "media connection ended");
             }
         });
@@ -73,26 +78,34 @@ struct Cipher {
     iv: [u8; 16],
 }
 
-async fn handle(tcp: TcpStream, options: &MockOptions) -> anyhow::Result<()> {
+async fn handle(tcp: TcpStream, options: &MockOptions, nonces: &Nonces) -> anyhow::Result<()> {
     tcp.set_nodelay(true).ok();
     let (read, mut writer) = tcp.into_split();
     let mut reader = BufReader::new(read);
 
-    // Unauthenticated request → Digest challenge.
-    read_head(&mut reader).await?;
-    let nonce = crypto::random_hex(16, false);
-    let opaque = crypto::random_hex(8, false);
-    writer
-        .write_all(
-            format!(
-                "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Digest realm=\"{REALM}\",qop=\"auth\",nonce=\"{nonce}\",opaque=\"{opaque}\",encrypt_type=\"3\"\r\nContent-Length: 0\r\n\r\n"
+    // Requests without credentials get a Digest challenge; the authenticated retry may
+    // come on this connection or a new one.
+    let headers = loop {
+        let headers = read_head(&mut reader).await?;
+        if headers.contains_key("authorization") {
+            break headers;
+        }
+        if headers.get("content-length").map(String::as_str) == Some("-1") {
+            // Like 2026 firmware: drop the connection.
+            return Ok(());
+        }
+        let nonce = crypto::random_hex(16, false);
+        nonces.lock().expect("nonces").insert(nonce.clone());
+        let opaque = crypto::random_hex(8, false);
+        writer
+            .write_all(
+                format!(
+                    "HTTP/1.0 401 Unauthorized\r\nWWW-Authenticate: Digest realm=\"{REALM}\",algorithm=\"MD5\",encrypt_type=\"3\",qop=\"auth\",nonce=\"{nonce}\",opaque=\"{opaque}\"\r\n\r\n"
+                )
+                .as_bytes(),
             )
-            .as_bytes(),
-        )
-        .await?;
-
-    // Authenticated request → key exchange.
-    let headers = read_head(&mut reader).await?;
+            .await?;
+    };
     let auth = parse_params(
         headers
             .get("authorization")
@@ -104,12 +117,14 @@ async fn handle(tcp: TcpStream, options: &MockOptions) -> anyhow::Result<()> {
     let ha1 = md5_hex(&format!("{}:{REALM}:{hashed}", get("username")));
     let ha2 = md5_hex("POST:/stream");
     let expected = md5_hex(&format!(
-        "{ha1}:{nonce}:{}:{}:{}:{ha2}",
+        "{ha1}:{}:{}:{}:{}:{ha2}",
+        get("nonce"),
         get("nc"),
         get("cnonce"),
         get("qop")
     ));
-    if get("response") != expected || get("nonce") != nonce {
+    let known_nonce = nonces.lock().expect("nonces").contains(get("nonce"));
+    if get("response") != expected || !known_nonce {
         writer
             .write_all(b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n")
             .await?;

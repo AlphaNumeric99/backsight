@@ -83,9 +83,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let started = Instant::now();
-    let mut session = MediaSession::connect(&media_config).await?;
-    println!("connected and authenticated in {:?}", started.elapsed());
-    session.start(&request).await?;
+    let mut session = MediaSession::connect_and_start(&media_config, Some(&request)).await?;
+    println!(
+        "connected, authenticated and requested in {:?}",
+        started.elapsed()
+    );
 
     let mut file = tokio::fs::File::create(out).await?;
     let (mut parts, mut bytes, mut printed_headers) = (0usize, 0usize, false);

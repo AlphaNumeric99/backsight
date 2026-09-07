@@ -295,48 +295,101 @@ pub struct MediaSession<S = TcpStream> {
 
 impl MediaSession<TcpStream> {
     /// Connects and authenticates.
+    ///
+    /// The camera answers the unauthenticated request with an HTTP/1.0 challenge and
+    /// takes several seconds to handle a second request on that same connection, so
+    /// the authenticated request goes out on a fresh one.
     pub async fn connect(config: &MediaConfig) -> Result<Self> {
+        Self::connect_and_start(config, None).await
+    }
+
+    /// Connects, authenticates and sends `request` in the same round trip. Cameras hold
+    /// back their answer to the authenticated request until the first request part
+    /// arrives (or a ~4 s timeout passes), so sending it right away saves seconds.
+    pub async fn connect_and_start(
+        config: &MediaConfig,
+        request: Option<&StreamRequest>,
+    ) -> Result<Self> {
+        let started = std::time::Instant::now();
+        let mut first = BufReader::new(Self::dial(config).await?);
+        let challenge = request_challenge(&mut first).await?;
+        drop(first);
+        tracing::debug!(elapsed = ?started.elapsed(), "media: got the Digest challenge");
+        let session = Self::authenticate(
+            BufReader::new(Self::dial(config).await?),
+            config,
+            &challenge,
+            request,
+        )
+        .await?;
+        tracing::debug!(elapsed = ?started.elapsed(), "media: authenticated");
+        Ok(session)
+    }
+
+    async fn dial(config: &MediaConfig) -> Result<TcpStream> {
         let addr = (config.host.as_str(), config.port);
         let tcp = tokio::time::timeout(config.connect_timeout, TcpStream::connect(addr))
             .await
             .map_err(|_| Error::protocol("timed out connecting to the media server"))?
             .map_err(|e| Error::protocol(format!("media server connection failed: {e}")))?;
         tcp.set_nodelay(true).ok();
-        Self::handshake(tcp, config).await
+        Ok(tcp)
     }
 }
 
+const REQUEST_LINE: &str = "POST /stream HTTP/1.1";
+
+/// Headers of both handshake requests. pytapo sends `Content-Length: -1`; 2026 firmware
+/// (seen on a C325WB 1.4.4) drops the connection on that, while `0` (what go2rtc sends)
+/// works everywhere.
+fn base_headers() -> String {
+    format!(
+        "Content-Type: multipart/mixed;boundary={CLIENT_BOUNDARY}\r\nConnection: keep-alive\r\nContent-Length: 0\r\n"
+    )
+}
+
+/// Sends the unauthenticated request and returns the Digest challenge parameters.
+async fn request_challenge<S: AsyncRead + AsyncWrite + Unpin>(
+    stream: &mut BufReader<S>,
+) -> Result<HashMap<String, String>> {
+    write_all(
+        stream,
+        format!("{REQUEST_LINE}\r\n{}\r\n", base_headers()).as_bytes(),
+    )
+    .await?;
+    let (status, headers) = read_head(stream).await?;
+    if status != 401 {
+        return Err(Error::protocol(format!(
+            "expected a 401 challenge, got HTTP {status}"
+        )));
+    }
+    skip_body(stream, &headers).await?;
+    let challenge_header = headers
+        .get("www-authenticate")
+        .ok_or_else(|| Error::protocol("401 without WWW-Authenticate"))?;
+    Ok(parse_params(
+        challenge_header
+            .strip_prefix("Digest")
+            .unwrap_or(challenge_header),
+    ))
+}
+
 impl<S: AsyncRead + AsyncWrite + Unpin> MediaSession<S> {
-    /// Runs the Digest authentication and key exchange over an existing connection.
+    /// Runs the Digest authentication and key exchange over one existing connection.
     pub async fn handshake(io: S, config: &MediaConfig) -> Result<Self> {
         let mut stream = BufReader::new(io);
-        let request_line = "POST /stream HTTP/1.1";
-        let base_headers = format!(
-            "Content-Type: multipart/mixed;boundary={CLIENT_BOUNDARY}\r\nConnection: keep-alive\r\nContent-Length: -1\r\n"
-        );
+        let challenge = request_challenge(&mut stream).await?;
+        Self::authenticate(stream, config, &challenge, None).await
+    }
 
-        write_all(
-            &mut stream,
-            format!("{request_line}\r\n{base_headers}\r\n").as_bytes(),
-        )
-        .await?;
-        let (status, headers) = read_head(&mut stream).await?;
-        if status != 401 {
-            return Err(Error::protocol(format!(
-                "expected a 401 challenge, got HTTP {status}"
-            )));
-        }
-        skip_body(&mut stream, &headers).await?;
-        let challenge_header = headers
-            .get("www-authenticate")
-            .ok_or_else(|| Error::protocol("401 without WWW-Authenticate"))?;
-        let challenge = parse_params(
-            challenge_header
-                .strip_prefix("Digest")
-                .unwrap_or(challenge_header),
-        );
-
-        let hashed_password = hash_media_password(config.password.expose_secret(), &challenge);
+    /// Sends the authenticated request for `challenge` and sets up decryption.
+    async fn authenticate(
+        mut stream: BufReader<S>,
+        config: &MediaConfig,
+        challenge: &HashMap<String, String>,
+        first_request: Option<&StreamRequest>,
+    ) -> Result<Self> {
+        let hashed_password = hash_media_password(config.password.expose_secret(), challenge);
         let realm = challenge.get("realm").map(String::as_str).unwrap_or("");
         let nonce = challenge
             .get("nonce")
@@ -364,12 +417,15 @@ impl<S: AsyncRead + AsyncWrite + Unpin> MediaSession<S> {
             authorization.push_str(&format!(",opaque=\"{opaque}\""));
         }
 
-        write_all(
-            &mut stream,
-            format!("{request_line}\r\n{base_headers}Authorization: {authorization}\r\n\r\n")
-                .as_bytes(),
+        let mut message = format!(
+            "{REQUEST_LINE}\r\n{}Authorization: {authorization}\r\n\r\n",
+            base_headers()
         )
-        .await?;
+        .into_bytes();
+        if let Some(request) = first_request {
+            message.extend_from_slice(&request_part(request, config.window_size));
+        }
+        write_all(&mut stream, &message).await?;
         let (status, headers) = read_head(&mut stream).await?;
         match status {
             200 => {}
@@ -407,19 +463,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> MediaSession<S> {
 
     /// Sends a stream request. Read the camera's answer and media with [`Self::next_part`].
     pub async fn start(&mut self, request: &StreamRequest) -> Result<()> {
-        let seq = 1000 + (rand_u32() % (0x7FFF - 1000));
-        let body = serde_json::to_vec(&request.to_json(seq)).expect("JSON");
-        let mut head = format!(
-            "--{CLIENT_BOUNDARY}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n",
-            body.len()
-        );
-        if let Some(window) = self.window_size {
-            head.push_str(&format!("X-Data-Window-Size: {window}\r\n"));
-        }
-        head.push_str("\r\n");
-        let mut message = head.into_bytes();
-        message.extend_from_slice(&body);
-        message.extend_from_slice(b"\r\n");
+        let message = request_part(request, self.window_size);
         write_all(&mut self.stream, &message).await
     }
 
@@ -519,6 +563,24 @@ impl<S: AsyncRead + AsyncWrite + Unpin> MediaSession<S> {
     pub fn session_id(&self) -> Option<&str> {
         self.session_id.as_deref()
     }
+}
+
+/// A JSON request as one client multipart part.
+fn request_part(request: &StreamRequest, window_size: Option<u32>) -> Vec<u8> {
+    let seq = 1000 + (rand_u32() % (0x7FFF - 1000));
+    let body = serde_json::to_vec(&request.to_json(seq)).expect("JSON");
+    let mut head = format!(
+        "--{CLIENT_BOUNDARY}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n",
+        body.len()
+    );
+    if let Some(window) = window_size {
+        head.push_str(&format!("X-Data-Window-Size: {window}\r\n"));
+    }
+    head.push_str("\r\n");
+    let mut message = head.into_bytes();
+    message.extend_from_slice(&body);
+    message.extend_from_slice(b"\r\n");
+    message
 }
 
 fn rand_u32() -> u32 {
