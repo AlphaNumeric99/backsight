@@ -8,7 +8,9 @@ use std::fmt;
 
 use bytes::Bytes;
 
+pub mod aac;
 mod bits;
+pub mod g711;
 pub mod h264;
 pub mod h265;
 
