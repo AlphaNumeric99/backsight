@@ -13,6 +13,9 @@ mod bits;
 pub mod g711;
 pub mod h264;
 pub mod h265;
+pub mod ts;
+
+pub use ts::{DemuxStats, TsDemuxer};
 
 /// Timestamp in 90 kHz MPEG system clock ticks.
 pub type Ticks90k = i64;
