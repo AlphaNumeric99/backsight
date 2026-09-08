@@ -3,6 +3,22 @@
 //!
 //! These types are the contract between the stream layer, the desktop app's player
 //! pipeline and the exporter, so keep them small and decoder-friendly.
+//!
+//! The pieces fit together like this:
+//!
+//! ```text
+//! TS bytes ──► ts::TsDemuxer ──► MediaEvent::{VideoConfig, Video, AudioConfig, Audio}
+//!                                   │                              │
+//!                                   ├──► player (WebCodecs)        └──► g711 ──► PCM
+//!                                   └──► mp4::Mp4Writer ──► .mp4
+//! ```
+//!
+//! - [`ts`]: incremental MPEG-TS demuxer ([`TsDemuxer`]).
+//! - [`h264`], [`h265`]: Annex B parsing, SPS parsing, `avcC`/`hvcC` records and RFC 6381
+//!   codec strings.
+//! - [`aac`]: ADTS headers and `AudioSpecificConfig`.
+//! - [`g711`]: A-law and µ-law decoding to 16-bit PCM.
+//! - [`mp4`]: fast-start MP4 writer ([`Mp4Writer`]).
 
 use std::fmt;
 
@@ -13,8 +29,10 @@ mod bits;
 pub mod g711;
 pub mod h264;
 pub mod h265;
+pub mod mp4;
 pub mod ts;
 
+pub use mp4::{AacTrackConfig, Mp4Summary, Mp4Writer, Mp4WriterOptions};
 pub use ts::{DemuxStats, TsDemuxer};
 
 /// Timestamp in 90 kHz MPEG system clock ticks.

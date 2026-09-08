@@ -14,6 +14,9 @@ categories = ["api-bindings", "multimedia::video", "network-programming"]
 bytes.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+# Calendar-versioned; minor releases may change box structs, so stay on 2026.3.x.
+shiguredo_mp4 = "~2026.3"
+tempfile = "3.10"
 thiserror.workspace = true
 tracing.workspace = true
 
