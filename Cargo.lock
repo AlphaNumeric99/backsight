@@ -3971,6 +3971,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "shiguredo_mp4"
+version = "2026.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b135058874815f8f13edae644ceedb659f7238fe4a9e2b1bdceecc72dc659b35"
+
+[[package]]
 name = "shlex"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4298,6 +4304,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.0",
+ "shiguredo_mp4",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
  "tracing",
@@ -4309,7 +4317,11 @@ name = "tapo-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "clap",
+ "serde_json",
  "tapo-camera",
+ "tempfile",
+ "tracing-subscriber",
 ]
 
 [[package]]

@@ -27,6 +27,9 @@ secrecy = "0.10"
 serde.workspace = true
 serde_json.workspace = true
 sha2 = "0.11"
+# Calendar-versioned; minor releases may change box structs, so stay on 2026.3.x.
+shiguredo_mp4 = "~2026.3"
+tempfile = "3.10"
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
