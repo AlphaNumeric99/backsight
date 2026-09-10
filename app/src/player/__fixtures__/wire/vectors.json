@@ -1,0 +1,162 @@
+{
+  "about": "Golden vectors for the Backsight wire format v1 (docs/ARCHITECTURE.md). Each vector is one batch: <name>.bspk holds its bytes and `packets` describes it. The .bspk files are written by app/scripts/make-wire-vectors.mjs and checked by app/src/player/wire.test.ts (decode and encode) and app/src-tauri/src/wire.rs (encode). Hex fields are lowercase; timestamps are microseconds since the Unix epoch.",
+  "vectors": [
+    {
+      "name": "video_config_h264",
+      "packets": [
+        {
+          "kind": "videoConfig",
+          "timestampUs": 1790000000000000,
+          "discontinuity": false,
+          "codec": "avc1.4D401F",
+          "codedWidth": 1280,
+          "codedHeight": 720,
+          "descriptionHex": "014d401fffe1000a674d401f965402802dc801000468ee3c80"
+        }
+      ]
+    },
+    {
+      "name": "video_config_h265_discontinuity",
+      "packets": [
+        {
+          "kind": "videoConfig",
+          "timestampUs": 1790000123456789,
+          "discontinuity": true,
+          "codec": "hvc1.1.6.L93.B0",
+          "codedWidth": 640,
+          "codedHeight": 360,
+          "descriptionHex": "01016000000090000000000000005df000fcfdf8f800000f03a00001000440010c01a10001000742010101600000a100010003440100"
+        }
+      ]
+    },
+    {
+      "name": "video_frame_key",
+      "packets": [
+        {
+          "kind": "videoFrame",
+          "timestampUs": 1790000000066667,
+          "discontinuity": true,
+          "keyframe": true,
+          "dataHex": "0000000565888400af"
+        }
+      ]
+    },
+    {
+      "name": "video_frame_delta",
+      "packets": [
+        {
+          "kind": "videoFrame",
+          "timestampUs": 1790000000133333,
+          "discontinuity": false,
+          "keyframe": false,
+          "dataHex": "00000003419a02"
+        }
+      ]
+    },
+    {
+      "name": "audio_config",
+      "packets": [
+        {
+          "kind": "audioConfig",
+          "timestampUs": 1790000000000000,
+          "discontinuity": false,
+          "sampleRate": 8000,
+          "channels": 1,
+          "format": "s16le"
+        }
+      ]
+    },
+    {
+      "name": "audio_pcm",
+      "packets": [
+        {
+          "kind": "audioPcm",
+          "timestampUs": 1790000000040000,
+          "discontinuity": false,
+          "samples": [0, 1, -1, 256, 32767, -32768, 12345, -12345]
+        }
+      ]
+    },
+    {
+      "name": "status_error",
+      "packets": [
+        {
+          "kind": "status",
+          "timestampUs": 0,
+          "discontinuity": false,
+          "state": "error",
+          "code": "stream_limit",
+          "message": "Too many viewers on \"Porch\" — close one"
+        }
+      ]
+    },
+    {
+      "name": "status_buffering",
+      "packets": [
+        {
+          "kind": "status",
+          "timestampUs": 1790000000200000,
+          "discontinuity": false,
+          "state": "buffering"
+        }
+      ]
+    },
+    {
+      "name": "end_of_stream",
+      "packets": [
+        {
+          "kind": "endOfStream",
+          "timestampUs": 0,
+          "discontinuity": false
+        }
+      ]
+    },
+    {
+      "name": "batch_mixed",
+      "packets": [
+        {
+          "kind": "videoConfig",
+          "timestampUs": 1790000000000000,
+          "discontinuity": true,
+          "codec": "avc1.64001F",
+          "codedWidth": 1920,
+          "codedHeight": 1080,
+          "descriptionHex": "0164001fffe100046764001f01000468ee3cb0"
+        },
+        {
+          "kind": "audioConfig",
+          "timestampUs": 1790000000000000,
+          "discontinuity": false,
+          "sampleRate": 16000,
+          "channels": 2,
+          "format": "s16le"
+        },
+        {
+          "kind": "videoFrame",
+          "timestampUs": 1790000000000000,
+          "discontinuity": false,
+          "keyframe": true,
+          "dataHex": "0000000265b8"
+        },
+        {
+          "kind": "audioPcm",
+          "timestampUs": 1790000000000000,
+          "discontinuity": false,
+          "samples": [100, -100, 2000, -2000]
+        },
+        {
+          "kind": "status",
+          "timestampUs": 9007199254740991,
+          "discontinuity": false,
+          "state": "playing",
+          "code": "resumed"
+        },
+        {
+          "kind": "endOfStream",
+          "timestampUs": -1,
+          "discontinuity": false
+        }
+      ]
+    }
+  ]
+}
