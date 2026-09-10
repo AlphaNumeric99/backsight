@@ -1,3 +1,6 @@
+#[allow(dead_code)] // Used by the media hub once it streams to the player.
+mod wire;
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {

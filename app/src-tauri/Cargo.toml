@@ -24,5 +24,8 @@ serde.workspace = true
 serde_json.workspace = true
 tapo-camera.workspace = true
 
+[dev-dependencies]
+bytes.workspace = true
+
 [lints]
 workspace = true
