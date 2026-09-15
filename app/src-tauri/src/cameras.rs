@@ -43,8 +43,7 @@ pub struct CameraHandle {
     status: RwLock<CameraStatus>,
     info: RwLock<LiveInfo>,
     user_id: tokio::sync::Mutex<Option<u64>>,
-    /// Held while a media session is open: cameras allow only one.
-    pub media: tokio::sync::Mutex<()>,
+    audio_rate: tokio::sync::OnceCell<u32>,
 }
 
 impl CameraHandle {
@@ -56,7 +55,7 @@ impl CameraHandle {
             status: RwLock::new(CameraStatus::new(CameraState::Connecting)),
             info: RwLock::new(LiveInfo::default()),
             user_id: tokio::sync::Mutex::new(None),
-            media: tokio::sync::Mutex::new(()),
+            audio_rate: tokio::sync::OnceCell::new(),
         }
     }
 
@@ -91,6 +90,26 @@ impl CameraHandle {
         let id = self.client().user_id().await?;
         *cached = Some(id);
         Ok(id)
+    }
+
+    /// The microphone sample rate (from `getAudioConfig`, in kHz there), 8 kHz if unknown.
+    pub async fn audio_rate(&self) -> u32 {
+        *self
+            .audio_rate
+            .get_or_init(|| async {
+                self.client()
+                    .audio_config()
+                    .await
+                    .ok()
+                    .and_then(|config| {
+                        let rate = config.pointer("/microphone/sampling_rate")?;
+                        rate.as_u64().or_else(|| rate.as_str()?.parse().ok())
+                    })
+                    .map(|khz| (khz * 1000) as u32)
+                    .filter(|hz| (8_000..=48_000).contains(hz))
+                    .unwrap_or(8_000)
+            })
+            .await
     }
 
     pub fn to_api(&self) -> Camera {

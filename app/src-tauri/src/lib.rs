@@ -7,8 +7,8 @@ mod error;
 mod model;
 mod recordings;
 mod secrets;
+mod streams;
 mod thumbnails;
-#[allow(dead_code)] // used by the stream pipeline, which lands next
 mod wire;
 
 use std::sync::Arc;
@@ -78,10 +78,12 @@ pub fn run() {
                 app.path().app_cache_dir()?.join("thumbnails"),
                 cameras.clone(),
             ));
+            let streams = Arc::new(streams::Streams::new(cameras.clone()));
             app.manage(AppState {
                 db,
                 cameras,
                 thumbnails,
+                streams,
                 default_export_dir,
             });
             Ok(())
@@ -102,6 +104,8 @@ pub fn run() {
             commands::list_exports,
             commands::save_snapshot,
             commands::reveal_export,
+            commands::open_stream,
+            commands::close_stream,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

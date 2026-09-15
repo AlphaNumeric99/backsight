@@ -62,7 +62,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         client_id,
                         start,
                         end: start + 3600,
-                        speed: std::env::var("TAPO_SPEED").ok().and_then(|s| s.parse().ok()).unwrap_or(1),
+                        speed: std::env::var("TAPO_SPEED")
+                            .ok()
+                            .and_then(|s| s.parse().ok())
+                            .unwrap_or(1),
                     },
                     Some(Duration::from_secs(seconds)),
                 )

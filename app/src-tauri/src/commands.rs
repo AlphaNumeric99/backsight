@@ -20,6 +20,7 @@ pub struct AppState {
     pub db: Arc<Db>,
     pub cameras: Arc<CameraManager>,
     pub thumbnails: Arc<crate::thumbnails::Thumbnails>,
+    pub streams: Arc<crate::streams::Streams>,
     pub default_export_dir: String,
 }
 
@@ -140,6 +141,21 @@ pub async fn update_settings(state: State<'_, AppState>, patch: Value) -> ApiRes
 #[tauri::command]
 pub async fn list_exports(state: State<'_, AppState>) -> ApiResult<Vec<ExportJob>> {
     Ok(state.db.exports()?)
+}
+
+#[tauri::command]
+pub async fn open_stream(
+    state: State<'_, AppState>,
+    req: crate::model::StreamRequest,
+    channel: tauri::ipc::Channel,
+) -> ApiResult<String> {
+    state.streams.open(req, channel)
+}
+
+#[tauri::command]
+pub async fn close_stream(state: State<'_, AppState>, id: String) -> ApiResult<()> {
+    state.streams.close(&id);
+    Ok(())
 }
 
 /// Makes a string safe to use as a file name on every platform.
