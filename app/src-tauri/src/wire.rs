@@ -10,6 +10,7 @@ use serde::Serialize;
 use tapo_camera::media::{AudioConfig, VideoConfig, VideoFrame};
 
 /// Size of the packet header in bytes.
+#[cfg_attr(not(test), allow(dead_code))]
 pub const HEADER_LEN: usize = 16;
 
 /// Packet kinds (header byte 4).
@@ -35,6 +36,8 @@ pub const FLAG_DISCONTINUITY: u8 = 1 << 1;
 pub enum StreamState {
     Buffering,
     Playing,
+    /// Part of the format; the backend ends streams with an `EndOfStream` packet.
+    #[allow(dead_code)]
     Ended,
     Error,
 }

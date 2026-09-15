@@ -21,6 +21,7 @@ pub struct AppState {
     pub cameras: Arc<CameraManager>,
     pub thumbnails: Arc<crate::thumbnails::Thumbnails>,
     pub streams: Arc<crate::streams::Streams>,
+    pub exports: Arc<crate::exports::Exports>,
     pub default_export_dir: String,
 }
 
@@ -141,6 +142,20 @@ pub async fn update_settings(state: State<'_, AppState>, patch: Value) -> ApiRes
 #[tauri::command]
 pub async fn list_exports(state: State<'_, AppState>) -> ApiResult<Vec<ExportJob>> {
     Ok(state.db.exports()?)
+}
+
+#[tauri::command]
+pub async fn start_export(
+    state: State<'_, AppState>,
+    req: crate::model::ExportRequest,
+) -> ApiResult<ExportJob> {
+    let settings = state.settings()?;
+    state.exports.start(req, &settings)
+}
+
+#[tauri::command]
+pub async fn cancel_export(state: State<'_, AppState>, id: String) -> ApiResult<()> {
+    state.exports.cancel(&id)
 }
 
 #[tauri::command]

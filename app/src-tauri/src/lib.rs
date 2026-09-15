@@ -1,9 +1,9 @@
-#[allow(dead_code)] // used by exports, which land next
 mod audio_aac;
 mod cameras;
 mod commands;
 mod db;
 mod error;
+mod exports;
 mod model;
 mod recordings;
 mod secrets;
@@ -79,11 +79,13 @@ pub fn run() {
                 cameras.clone(),
             ));
             let streams = Arc::new(streams::Streams::new(cameras.clone()));
+            let exports = Arc::new(exports::Exports::new(db.clone(), cameras.clone()));
             app.manage(AppState {
                 db,
                 cameras,
                 thumbnails,
                 streams,
+                exports,
                 default_export_dir,
             });
             Ok(())
@@ -106,6 +108,8 @@ pub fn run() {
             commands::reveal_export,
             commands::open_stream,
             commands::close_stream,
+            commands::start_export,
+            commands::cancel_export,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

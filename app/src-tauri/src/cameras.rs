@@ -518,7 +518,7 @@ pub fn parse_storage(value: &Value) -> Option<StorageInfo> {
     };
     // Prefer the exact byte counts ("244007829504B") over the rounded ones ("227.3GB").
     let size = |key: &str| {
-        disk.get(&format!("{key}_accurate"))
+        disk.get(format!("{key}_accurate"))
             .and_then(parse_size)
             .or_else(|| disk.get(key).and_then(parse_size))
             .unwrap_or(0)

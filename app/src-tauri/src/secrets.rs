@@ -38,6 +38,7 @@ pub fn set_camera_account(camera_id: &str, account: &CameraAccount) -> ApiResult
         .map_err(|e| ApiError::internal(format!("could not save the camera account: {e}")))
 }
 
+#[allow(dead_code)] // for the RTSP live source (v1.x)
 pub fn camera_account(camera_id: &str) -> Option<CameraAccount> {
     let json = entry(&rtsp_account(camera_id)).ok()?.get_password().ok()?;
     serde_json::from_str(&json).ok()

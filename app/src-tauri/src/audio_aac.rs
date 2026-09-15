@@ -25,7 +25,7 @@ pub struct Upsampler {
 impl Upsampler {
     /// `None` when `input_rate` doesn't divide 48 kHz.
     pub fn new(input_rate: u32) -> Option<Self> {
-        if input_rate == 0 || OUTPUT_RATE % input_rate != 0 {
+        if input_rate == 0 || !OUTPUT_RATE.is_multiple_of(input_rate) {
             return None;
         }
         let factor = (OUTPUT_RATE / input_rate) as usize;
@@ -55,6 +55,7 @@ impl Upsampler {
         })
     }
 
+    #[cfg(test)]
     pub fn factor(&self) -> usize {
         self.factor
     }
