@@ -173,12 +173,14 @@ pub enum Quality {
 pub enum StreamRequest {
     /// Live view.
     Live { quality: Quality, channel: u32 },
-    /// SD-card playback paced at real time, starting at `start` (camera clock, unix
-    /// seconds). Doesn't stop by itself at `end`.
+    /// SD-card playback starting at `start` (camera clock, unix seconds), paced by the
+    /// camera at `speed`× real time (the `scale` field, `"speed/1"`). Doesn't stop by
+    /// itself at `end`.
     Playback {
         client_id: u64,
         start: i64,
         end: i64,
+        speed: u32,
     },
     /// SD-card download of `[start, end]` as fast as the link allows (~10× real time);
     /// ends with a "finished" notification.
@@ -214,11 +216,12 @@ impl StreamRequest {
                 client_id,
                 start,
                 end,
+                speed,
             } => json!({
                 "playback": {
                     "client_id": client_id,
                     "channels": [0, 1],
-                    "scale": "1/1",
+                    "scale": format!("{}/1", speed.max(&1)),
                     "start_time": start.to_string(),
                     "end_time": end.to_string(),
                     "event_type": [1, 2],

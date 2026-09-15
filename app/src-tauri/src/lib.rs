@@ -8,6 +8,8 @@ mod model;
 mod recordings;
 mod secrets;
 mod thumbnails;
+#[allow(dead_code)] // used by the stream pipeline, which lands next
+mod wire;
 
 use std::sync::Arc;
 

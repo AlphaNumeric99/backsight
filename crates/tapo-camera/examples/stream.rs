@@ -61,7 +61,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     StreamRequest::Playback {
                         client_id,
                         start,
-                        end: start + seconds as i64,
+                        end: start + 3600,
+                        speed: std::env::var("TAPO_SPEED").ok().and_then(|s| s.parse().ok()).unwrap_or(1),
                     },
                     Some(Duration::from_secs(seconds)),
                 )

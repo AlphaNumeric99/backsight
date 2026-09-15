@@ -29,4 +29,18 @@ export default defineConfig(() => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+
+  // The player's media worker and audio worklet are ES modules.
+  worker: { format: "es" as const },
+
+  build: {
+    rolldownOptions: {
+      input: {
+        main: "index.html",
+        // The player dev harness: `vite` serves it at /player-harness.html. It is left out of
+        // app builds unless BACKSIGHT_HARNESS=1 (e.g. to try it with `vite preview`).
+        ...(process.env.BACKSIGHT_HARNESS ? { harness: "player-harness.html" } : {}),
+      },
+    },
+  },
 }));

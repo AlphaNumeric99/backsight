@@ -40,5 +40,8 @@ windows = { version = "0.62", features = [
     "Win32_System_Com",
 ] }
 
+[dev-dependencies]
+bytes.workspace = true
+
 [lints]
 workspace = true
