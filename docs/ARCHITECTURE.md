@@ -54,6 +54,18 @@ discontinuity flag follows every seek.
 Implementations: `app/src-tauri/src/wire.rs` (encoder) and `app/src/player/wire.ts` (decoder)
 share the golden test vectors in `app/src/player/__fixtures__/`.
 
+Rules the player relies on:
+
+- Packets arrive in order (one channel per stream).
+- A `VideoConfig` comes right before a keyframe.
+- Flag every seek with the discontinuity bit. Unflagged jumps (more than 3 s forward at the
+  current speed, or more than 1 s back) are treated as discontinuities too, but cost a wait for
+  the next keyframe.
+- Playback timestamps advance at the stream's speed; the backend paces delivery at that speed
+  and the player's clock plays them at the same rate.
+- Audio is only sent at 1×.
+- A `Status` with state `error` is final; `buffering` shows until the next frame arrives.
+
 ## Backend (`app/src-tauri/src`)
 
 | Module | Role |

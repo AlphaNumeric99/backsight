@@ -19,7 +19,8 @@
         "minWidth": 960,
         "minHeight": 640,
         "center": true,
-        "backgroundThrottling": "disabled"
+        "backgroundThrottling": "disabled",
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required"
       }
     ],
     "security": {
