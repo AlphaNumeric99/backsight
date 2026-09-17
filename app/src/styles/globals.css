@@ -1,0 +1,487 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/*
+ * Backsight design tokens.
+ *
+ * The theme preference lives in `data-theme` on <html>: "system" | "light" | "dark".
+ * `dark:` utilities and the dark token block below apply to "dark", and to "system"
+ * whenever the OS prefers a dark scheme.
+ */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where([data-theme="system"], [data-theme="system"] *) {
+      @slot;
+    }
+  }
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+
+    /* Surfaces */
+    --background: #f4f5f7;
+    --surface: #ffffff;
+    --surface-2: #f8f9fb;
+    --surface-3: #eff1f5;
+    --sunken: #e8ebf0;
+    --popover: #ffffff;
+    --sidebar: #fafbfc;
+    --scrim: rgb(9 12 20 / 0.42);
+
+    /* Text levels */
+    --foreground: #0f1729;
+    --text-2: #5b6475;
+    --text-3: #8a93a3;
+
+    /* Lines */
+    --border: #e5e8ed;
+    --border-strong: #d4d9e0;
+    --card-border: rgb(15 23 41 / 0.055);
+    --input: #d8dce3;
+
+    /* Brand accent: "Backsight azure" */
+    --brand: #3461f4;
+    --brand-hover: #2a52e0;
+    --brand-pressed: #2447c7;
+    --brand-soft: #e9eeff;
+    --brand-softer: #f3f6ff;
+    --brand-text: #2c55e3;
+    --brand-contrast: #ffffff;
+    --ring: #3461f4;
+
+    /* Status */
+    --success: #1a7f45;
+    --success-dot: #22b35f;
+    --success-soft: #e5f6ec;
+    --warning: #a85800;
+    --warning-dot: #f29d0b;
+    --warning-soft: #fff2de;
+    --danger: #c4282e;
+    --danger-dot: #e5484d;
+    --danger-soft: #fdeceb;
+    --neutral: #5b6475;
+    --neutral-dot: #98a1b0;
+    --neutral-soft: #eef0f3;
+    --live: #f0383b;
+
+    /* Detection event colours */
+    --ev-motion: #ee9500;
+    --ev-person: #1faa59;
+    --ev-vehicle: #7c4dff;
+    --ev-pet: #e0457b;
+    --ev-baby-cry: #12a594;
+    --ev-sound: #0e9aa7;
+    --ev-line-crossing: #f06a1d;
+    --ev-area-intrusion: #e5482f;
+    --ev-tamper: #64748b;
+    --ev-doorbell: #0b8bd4;
+    --ev-other: #8a93a3;
+
+    /* Timeline (read by the canvas; keep these as plain colours) */
+    --tl-band: rgb(52 97 244 / 0.15);
+    --tl-band-strong: rgb(52 97 244 / 0.3);
+    --tl-tick: rgb(15 23 41 / 0.13);
+    --tl-tick-major: rgb(15 23 41 / 0.32);
+    --tl-label: #687182;
+    --tl-playhead: #3461f4;
+    --tl-now: #e5484d;
+    --tl-hover: rgb(15 23 41 / 0.42);
+    --tl-outside: rgb(15 23 41 / 0.04);
+    --tl-future: rgb(15 23 41 / 0.05);
+    --tl-selection: rgb(52 97 244 / 0.16);
+
+    /* Video */
+    --video: #0b0d12;
+    --video-2: #151922;
+
+    /* Elevation */
+    --elev-xs: 0 1px 2px rgb(16 24 40 / 0.05);
+    --elev-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 3px 12px -4px rgb(16 24 40 / 0.07);
+    --elev-raised: 0 2px 4px -1px rgb(16 24 40 / 0.05), 0 14px 32px -12px rgb(16 24 40 / 0.2);
+    --elev-overlay: 0 4px 12px -4px rgb(16 24 40 / 0.1), 0 24px 56px -16px rgb(16 24 40 / 0.3);
+
+    /* Home header glow */
+    --hero:
+      radial-gradient(1100px 360px at 8% -12%, rgb(120 164 255 / 0.42), transparent 62%),
+      radial-gradient(900px 320px at 88% -24%, rgb(116 206 255 / 0.3), transparent 60%),
+      linear-gradient(180deg, #e3ecff 0%, rgb(244 245 247 / 0) 100%);
+
+    /* Scrollbars */
+    --scrollbar: rgb(15 23 41 / 0.18);
+    --scrollbar-hover: rgb(15 23 41 / 0.32);
+
+    /* Motion */
+    --dur-fast: 140ms;
+    --dur-base: 220ms;
+    --dur-slow: 360ms;
+    --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+    --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+    /* shadcn/ui aliases, so generated components drop in with the right colours */
+    --card: var(--surface);
+    --card-foreground: var(--foreground);
+    --popover-foreground: var(--foreground);
+    --primary: var(--brand);
+    --primary-foreground: var(--brand-contrast);
+    --secondary: var(--surface-3);
+    --secondary-foreground: var(--foreground);
+    --muted: var(--surface-3);
+    --muted-foreground: var(--text-2);
+    --accent: var(--surface-3);
+    --accent-foreground: var(--foreground);
+    --destructive: var(--danger-dot);
+    --radius: 0.75rem;
+  }
+
+  :root {
+    @variant dark {
+      color-scheme: dark;
+
+      --background: #0c0e12;
+      --surface: #15181e;
+      --surface-2: #1a1d24;
+      --surface-3: #22262f;
+      --sunken: #0f1115;
+      --popover: #1b1e26;
+      --sidebar: #101216;
+      --scrim: rgb(0 0 0 / 0.62);
+
+      --foreground: #eceef2;
+      --text-2: #9ba3b1;
+      --text-3: #6f7786;
+
+      --border: rgb(255 255 255 / 0.08);
+      --border-strong: rgb(255 255 255 / 0.14);
+      --card-border: rgb(255 255 255 / 0.075);
+      --input: rgb(255 255 255 / 0.12);
+
+      --brand: #3d67f7;
+      --brand-hover: #5078ff;
+      --brand-pressed: #3259e6;
+      --brand-soft: rgb(84 125 255 / 0.16);
+      --brand-softer: rgb(84 125 255 / 0.08);
+      --brand-text: #86a3ff;
+      --ring: #7394ff;
+
+      --success: #3ccb7f;
+      --success-dot: #3ccb7f;
+      --success-soft: rgb(60 203 127 / 0.14);
+      --warning: #f5a524;
+      --warning-dot: #f5a524;
+      --warning-soft: rgb(245 165 36 / 0.14);
+      --danger: #ff6166;
+      --danger-dot: #ff6166;
+      --danger-soft: rgb(255 97 102 / 0.15);
+      --neutral: #9ba3b1;
+      --neutral-dot: #7d8595;
+      --neutral-soft: rgb(155 163 177 / 0.14);
+
+      --ev-motion: #fbb238;
+      --ev-person: #3ecf7c;
+      --ev-vehicle: #a28bff;
+      --ev-pet: #f472a6;
+      --ev-baby-cry: #2dd4bf;
+      --ev-sound: #36c5d0;
+      --ev-line-crossing: #ff8a4c;
+      --ev-area-intrusion: #ff6b52;
+      --ev-tamper: #94a3b8;
+      --ev-doorbell: #38b2f5;
+      --ev-other: #9aa3b2;
+
+      --tl-band: rgb(96 132 255 / 0.2);
+      --tl-band-strong: rgb(96 132 255 / 0.38);
+      --tl-tick: rgb(255 255 255 / 0.11);
+      --tl-tick-major: rgb(255 255 255 / 0.28);
+      --tl-label: #8d95a4;
+      --tl-playhead: #7394ff;
+      --tl-now: #ff6166;
+      --tl-hover: rgb(255 255 255 / 0.5);
+      --tl-outside: rgb(255 255 255 / 0.025);
+      --tl-future: rgb(255 255 255 / 0.035);
+      --tl-selection: rgb(96 132 255 / 0.22);
+
+      --elev-xs: 0 1px 2px rgb(0 0 0 / 0.5);
+      --elev-card: 0 1px 2px rgb(0 0 0 / 0.3);
+      --elev-raised: 0 16px 32px -14px rgb(0 0 0 / 0.75);
+      --elev-overlay: 0 24px 56px -12px rgb(0 0 0 / 0.72), 0 0 0 1px rgb(255 255 255 / 0.06);
+
+      --hero:
+        radial-gradient(1000px 340px at 6% -20%, rgb(62 104 248 / 0.3), transparent 64%),
+        radial-gradient(800px 300px at 92% -30%, rgb(56 178 245 / 0.14), transparent 60%),
+        linear-gradient(180deg, rgb(62 104 248 / 0.07) 0%, rgb(12 14 18 / 0) 100%);
+
+      --scrollbar: rgb(255 255 255 / 0.16);
+      --scrollbar-hover: rgb(255 255 255 / 0.28);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --dur-fast: 0.01ms;
+      --dur-base: 0.01ms;
+      --dur-slow: 0.01ms;
+    }
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@theme inline {
+  /* shadcn/ui names */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Backsight names */
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-sunken: var(--sunken);
+  --color-sidebar: var(--sidebar);
+  --color-scrim: var(--scrim);
+  --color-fg: var(--foreground);
+  --color-fg-2: var(--text-2);
+  --color-fg-3: var(--text-3);
+  --color-border-strong: var(--border-strong);
+  --color-card-border: var(--card-border);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-pressed: var(--brand-pressed);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-softer: var(--brand-softer);
+  --color-brand-text: var(--brand-text);
+  --color-brand-contrast: var(--brand-contrast);
+  --color-success: var(--success);
+  --color-success-dot: var(--success-dot);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-dot: var(--warning-dot);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-dot: var(--danger-dot);
+  --color-danger-soft: var(--danger-soft);
+  --color-neutral: var(--neutral);
+  --color-neutral-dot: var(--neutral-dot);
+  --color-neutral-soft: var(--neutral-soft);
+  --color-live: var(--live);
+  --color-video: var(--video);
+  --color-video-2: var(--video-2);
+
+  --color-ev-motion: var(--ev-motion);
+  --color-ev-person: var(--ev-person);
+  --color-ev-vehicle: var(--ev-vehicle);
+  --color-ev-pet: var(--ev-pet);
+  --color-ev-baby-cry: var(--ev-baby-cry);
+  --color-ev-sound: var(--ev-sound);
+  --color-ev-line-crossing: var(--ev-line-crossing);
+  --color-ev-area-intrusion: var(--ev-area-intrusion);
+  --color-ev-tamper: var(--ev-tamper);
+  --color-ev-doorbell: var(--ev-doorbell);
+  --color-ev-other: var(--ev-other);
+
+  --shadow-xs: var(--elev-xs);
+  --shadow-card: var(--elev-card);
+  --shadow-raised: var(--elev-raised);
+  --shadow-overlay: var(--elev-overlay);
+}
+
+@theme {
+  --font-sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas,
+    monospace;
+
+  /* Radii: controls 10, tiles 12, cards 16, dialogs and sheets 20, chips are pills */
+  --radius-control: 10px;
+  --radius-tile: 12px;
+  --radius-card: 16px;
+  --radius-dialog: 20px;
+
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --animate-shimmer: shimmer 1.6s ease-in-out infinite;
+  --animate-radar: radar 2.4s cubic-bezier(0.2, 0.6, 0.35, 1) infinite;
+  --animate-pulse-dot: pulse-dot 1.6s ease-in-out infinite;
+  --animate-live-dot: live-dot 2s ease-in-out infinite;
+
+  @keyframes shimmer {
+    0% {
+      background-position: 180% 0;
+    }
+    100% {
+      background-position: -80% 0;
+    }
+  }
+  @keyframes radar {
+    0% {
+      transform: scale(0.35);
+      opacity: 0.7;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 0;
+    }
+  }
+  @keyframes pulse-dot {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
+  }
+  @keyframes live-dot {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgb(240 56 59 / 0.55);
+    }
+    60% {
+      box-shadow: 0 0 0 5px rgb(240 56 59 / 0);
+    }
+  }
+}
+
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--border);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  html {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
+    font-feature-settings: "cv11", "ss01";
+    background: var(--background);
+    color: var(--foreground);
+    scrollbar-color: var(--scrollbar) transparent;
+    scrollbar-width: thin;
+  }
+
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--foreground);
+    overflow: hidden;
+  }
+
+  ::selection {
+    background: var(--brand-soft);
+  }
+
+  /* One focus language everywhere: a crisp accent ring on keyboard focus only. */
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--scrollbar);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-hover);
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  img {
+    -webkit-user-drag: none;
+  }
+}
+
+@layer components {
+  /* Shimmering placeholder block. */
+  .skeleton {
+    background: linear-gradient(
+      100deg,
+      var(--surface-3) 30%,
+      color-mix(in srgb, var(--surface-3) 55%, var(--surface)) 50%,
+      var(--surface-3) 70%
+    );
+    background-size: 220% 100%;
+    animation: var(--animate-shimmer);
+  }
+
+  /* Soft sky-blue glow behind the Home header. */
+  .hero-glow {
+    background: var(--hero);
+  }
+
+  /* Legible text on top of video. */
+  .text-shadow-video {
+    text-shadow: 0 1px 2px rgb(0 0 0 / 0.55);
+  }
+
+  /* Glass used by overlay controls on video. */
+  .video-glass {
+    background: rgb(12 14 20 / 0.52);
+    backdrop-filter: blur(12px) saturate(1.4);
+    -webkit-backdrop-filter: blur(12px) saturate(1.4);
+    color: #fff;
+  }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
