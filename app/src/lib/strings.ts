@@ -268,6 +268,8 @@ export const strings = {
     recordSaved: "Recording added to Downloads",
     recordUnavailable: "Recording needs an SD card that's recording.",
     tiles: {
+      noVideo: "No video yet",
+      used: (pct: string) => `${pct} used`,
       connection: "Connection",
       stream: "Stream",
       storage: "SD card",
@@ -334,7 +336,11 @@ export const strings = {
       nowPlaying: "Playing",
       listLabel: "Detection events",
     },
+    today: "Today",
+    yesterday: "Yesterday",
+    recordingsLegend: "Has recordings",
     timeline: {
+      footage: "Recorded",
       label: "Playback position",
       backToPlayhead: "Back to playhead",
       zoomIn: "Zoom in",
@@ -396,7 +402,7 @@ export const strings = {
 
   downloads: {
     title: "Downloads",
-    subtitle: (dir: string) => `Clips are saved to ${dir}`,
+    savedTo: "Clips are saved to",
     changeFolder: "Change folder",
     inProgress: "In progress",
     finished: "Finished",

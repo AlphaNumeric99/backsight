@@ -115,14 +115,31 @@
     --scrollbar: rgb(15 23 41 / 0.18);
     --scrollbar-hover: rgb(15 23 41 / 0.32);
 
+    /* Interaction */
+    --hover: rgb(15 23 41 / 0.05);
+    --press: rgb(15 23 41 / 0.09);
+    --surface-3-hover: #e5e8ee;
+    --brand-soft-hover: #dde5ff;
+    --danger-hover: #d63b40;
+    --thumb: #ffffff;
+    --tooltip: #151a24;
+    --tooltip-foreground: #ffffff;
+
     /* Motion */
     --dur-fast: 140ms;
     --dur-base: 220ms;
     --dur-slow: 360ms;
     --ease-standard: cubic-bezier(0.2, 0, 0, 1);
     --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  }
 
-    /* shadcn/ui aliases, so generated components drop in with the right colours */
+  /*
+   * shadcn/ui aliases, so generated components drop in with the right colours. Declared on
+   * theme scopes too: custom properties inherit computed values, so aliases must be resolved
+   * where the underlying tokens change.
+   */
+  :root,
+  .theme-scope {
     --card: var(--surface);
     --card-foreground: var(--foreground);
     --popover-foreground: var(--foreground);
@@ -138,7 +155,9 @@
     --radius: 0.75rem;
   }
 
-  :root {
+  /* `.theme-scope` + data-theme="dark" makes a dark island inside a light page (clip sheet, multi-view). */
+  :root,
+  .theme-scope {
     @variant dark {
       color-scheme: dark;
 
@@ -217,6 +236,15 @@
 
       --scrollbar: rgb(255 255 255 / 0.16);
       --scrollbar-hover: rgb(255 255 255 / 0.28);
+
+      --hover: rgb(255 255 255 / 0.06);
+      --press: rgb(255 255 255 / 0.1);
+      --surface-3-hover: #2a2f39;
+      --brand-soft-hover: rgb(84 125 255 / 0.24);
+      --danger-hover: #ff7479;
+      --thumb: #353b47;
+      --tooltip: #2c313c;
+      --tooltip-foreground: #f3f4f7;
     }
   }
 
@@ -292,6 +320,14 @@
   --color-live: var(--live);
   --color-video: var(--video);
   --color-video-2: var(--video-2);
+  --color-hover: var(--hover);
+  --color-press: var(--press);
+  --color-surface-3-hover: var(--surface-3-hover);
+  --color-brand-soft-hover: var(--brand-soft-hover);
+  --color-danger-hover: var(--danger-hover);
+  --color-thumb: var(--thumb);
+  --color-tooltip: var(--tooltip);
+  --color-tooltip-foreground: var(--tooltip-foreground);
 
   --color-ev-motion: var(--ev-motion);
   --color-ev-person: var(--ev-person);
@@ -407,6 +443,10 @@
 
   ::selection {
     background: var(--brand-soft);
+  }
+
+  .theme-scope {
+    color: var(--foreground);
   }
 
   /* One focus language everywhere: a crisp accent ring on keyboard focus only. */

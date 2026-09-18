@@ -216,7 +216,11 @@ export function formatUtcOffset(offsetMinutes: number): string {
   return `UTC${sign}${pad2(Math.floor(abs / 60))}:${pad2(abs % 60)}`;
 }
 
-/** Whole minutes from `now` until `iso`, rounded up; never negative. */
+/**
+ * Minutes from `now` until `iso`, to the nearest minute: 0 once it has passed, and at least 1
+ * while it hasn't, so a countdown never says "now" early.
+ */
 export function minutesUntil(iso: IsoDateTime, now: number = Date.now()): number {
-  return Math.max(0, Math.ceil((parseIso(iso) - now) / MINUTE));
+  const mins = (parseIso(iso) - now) / MINUTE;
+  return mins <= 0 ? 0 : Math.max(1, Math.round(mins));
 }
