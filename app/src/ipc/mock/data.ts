@@ -478,7 +478,14 @@ export function createMockData(options: MockDataOptions = {}): Omit<BacksightApi
       }
       if (end > now()) throw apiError("invalid_input", "The clip can't end in the future.");
       assertReachable(cam);
-      const empty = !hasFootageBetween(fixtures.get(cam.id)!, start, end, cam.utcOffsetMinutes ?? offset, now());
+      // The last few seconds count too: the camera is still writing them to the card.
+      const empty = !hasFootageBetween(
+        fixtures.get(cam.id)!,
+        start,
+        end,
+        cam.utcOffsetMinutes ?? offset,
+        now() + 20 * SECOND,
+      );
       return queue.enqueue(
         {
           cameraId: cam.id,

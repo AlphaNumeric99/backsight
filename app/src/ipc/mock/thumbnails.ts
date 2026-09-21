@@ -228,8 +228,19 @@ const NIGHT_DEFS =
 const DAY_DEFS = `<radialGradient id='vig' cx='50%' cy='46%' r='75%'><stop offset='62%' stop-color='#000' stop-opacity='0'/><stop offset='100%' stop-color='#000' stop-opacity='.32'/></radialGradient>`;
 const TAMPER_DEFS = `<filter id='blur' x='-50%' y='-50%' width='200%' height='200%'><feGaussianBlur stdDeviation='14'/></filter>`;
 
+/**
+ * Percent-encodes everything that could break a consumer, including characters that
+ * `encodeURIComponent` leaves alone but an unquoted CSS `url(...)` rejects: ' ( ) and spaces.
+ */
 function toDataUrl(svg: string): string {
-  return `data:image/svg+xml,${encodeURIComponent(svg).replace(/%20/g, " ").replace(/%3D/g, "=").replace(/%3A/g, ":").replace(/%2F/g, "/")}`;
+  const body = encodeURIComponent(svg)
+    .replace(/'/g, "%27")
+    .replace(/\(/g, "%28")
+    .replace(/\)/g, "%29")
+    .replace(/%3D/g, "=")
+    .replace(/%3A/g, ":")
+    .replace(/%2F/g, "/");
+  return `data:image/svg+xml,${body}`;
 }
 
 /** `content` is the scene as the lens sees it (IR-filtered at night); `overlay` is drawn on top. */
