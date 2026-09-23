@@ -338,7 +338,8 @@ export function PlaybackTab({
           </Button>
         </div>
 
-        <div className="mx-auto w-full" style={{ maxWidth: "calc((100dvh - 400px) * 16 / 9)", minWidth: "min(100%, 480px)" }}>
+        <div className="mx-auto w-full" // Tall enough to fill the window without scrolling: header, toolbar and timeline take ~344 px.
+          style={{ maxWidth: "calc((100dvh - 344px) * 16 / 9)", minWidth: "min(100%, 480px)" }}>
           <VideoStage
             stageRef={stageRef}
             fullscreen={fullscreen}

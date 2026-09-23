@@ -73,7 +73,7 @@ export function HomePage() {
         </header>
 
         {cameras.isPending ? (
-          <div className="mt-9 grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(272px,1fr))]">
+          <div className="mt-9 grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(248px,1fr))]">
             {Array.from({ length: 6 }, (_, i) => (
               <CameraCardSkeleton key={i} />
             ))}
@@ -143,7 +143,7 @@ export function HomePage() {
                 </Card>
               ) : (
                 <LayoutGroup>
-                  <div className="grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(272px,1fr))]">
+                  <div className="grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(248px,1fr))]">
                     <AnimatePresence mode="popLayout" initial={false}>
                       {filtered.map((camera) => (
                         <CameraCard key={camera.id} camera={camera} groups={groupList} />

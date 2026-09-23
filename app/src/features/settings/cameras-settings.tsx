@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Check, EllipsisVertical, KeyRound, Pencil, Plus, Star, Trash2, X } from "lucide-react";
 import type { ApiError, Camera, CameraGroup } from "@/ipc";
@@ -82,6 +82,9 @@ function CameraRow({
   const update = useUpdateCamera();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(camera.name);
+  /** Set when Rename is chosen: the menu hands focus to the name field once it has closed. */
+  const focusName = useRef(false);
+  const nameRef = useRef<HTMLInputElement>(null);
 
   const save = (e?: FormEvent) => {
     e?.preventDefault();
@@ -108,6 +111,7 @@ function CameraRow({
         {editing ? (
           <form onSubmit={save} className="flex max-w-sm items-center gap-1.5">
             <Input
+              ref={nameRef}
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => {
@@ -118,7 +122,6 @@ function CameraRow({
                 }
               }}
               onBlur={() => save()}
-              autoFocus
               aria-label={strings.settings.renameLabel(camera.name)}
               className="h-8"
             />
@@ -177,8 +180,23 @@ function CameraRow({
               </IconButton>
             </span>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => setEditing(true)}>
+          <DropdownMenuContent
+            align="end"
+            onCloseAutoFocus={(e) => {
+              if (!focusName.current) return;
+              focusName.current = false;
+              e.preventDefault();
+              nameRef.current?.focus();
+              nameRef.current?.select();
+            }}
+          >
+            <DropdownMenuItem
+              onSelect={() => {
+                focusName.current = true;
+                setName(camera.name);
+                setEditing(true);
+              }}
+            >
               <Pencil />
               {strings.common.rename}
             </DropdownMenuItem>
