@@ -116,6 +116,8 @@ export function LiveTab({ camera }: { camera: Camera }) {
             stageRef={stageRef}
             fullscreen={fullscreen}
             pinControls={!info.viewable || playerState.kind === "error"}
+            // LIVE, REC and the camera clock stay on screen, like a camera's own overlay.
+            stickyTopLeft
             onDoubleClick={toggleFullscreen}
             video={
               <VideoSurface

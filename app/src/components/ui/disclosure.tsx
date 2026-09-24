@@ -27,10 +27,13 @@ export function Disclosure({
   icon,
 }: DisclosureProps) {
   const [uncontrolled, setUncontrolled] = useState(defaultOpen);
+  /** Clip only while the height animates, so focus rings inside aren't cut off. */
+  const [animating, setAnimating] = useState(false);
   const open = controlled ?? uncontrolled;
   const id = useId();
   const toggle = () => {
     const next = !open;
+    setAnimating(true);
     setUncontrolled(next);
     onOpenChange?.(next);
   };
@@ -61,7 +64,9 @@ export function Disclosure({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1, transition: transitions.base }}
             exit={{ height: 0, opacity: 0, transition: transitions.fast }}
-            className="overflow-hidden"
+            onAnimationStart={() => setAnimating(true)}
+            onAnimationComplete={() => setAnimating(false)}
+            className={cn(animating && "overflow-hidden")}
           >
             {children}
           </motion.div>

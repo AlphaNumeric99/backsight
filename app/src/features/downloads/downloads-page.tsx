@@ -18,6 +18,15 @@ import { useCameras } from "@/queries/cameras";
 import { useSettings } from "@/queries/settings";
 import { ACTIVE_EXPORT_STATES, useCancelExport, useExports, useRevealExport, useStartExport } from "@/queries/exports";
 
+const ACTIVE_ORDER: Record<ExportState, number> = {
+  running: 0,
+  paused: 1,
+  queued: 2,
+  done: 3,
+  failed: 3,
+  cancelled: 3,
+};
+
 const STATE_TONE: Record<ExportState, "neutral" | "brand" | "warning" | "success" | "danger"> = {
   queued: "neutral",
   running: "brand",
@@ -40,7 +49,10 @@ export function DownloadsPage() {
     () => [...(exports.data ?? [])].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)),
     [exports.data],
   );
-  const active = jobs.filter((j) => ACTIVE_EXPORT_STATES.has(j.state));
+  // In progress: the running job first, then the queue in the order it will run.
+  const active = jobs
+    .filter((j) => ACTIVE_EXPORT_STATES.has(j.state))
+    .sort((a, b) => ACTIVE_ORDER[a.state] - ACTIVE_ORDER[b.state] || Date.parse(a.createdAt) - Date.parse(b.createdAt));
   const finished = jobs.filter((j) => !ACTIVE_EXPORT_STATES.has(j.state));
   const cameraById = useMemo(() => new Map((cameras.data ?? []).map((c) => [c.id, c])), [cameras.data]);
 
