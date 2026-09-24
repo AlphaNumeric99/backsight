@@ -1,6 +1,10 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach } from "vitest";
 import { cleanup } from "@testing-library/react";
+import { MotionGlobalConfig } from "motion/react";
+
+// Animations finish instantly under test, so exits don't linger.
+MotionGlobalConfig.skipAnimations = true;
 
 afterEach(() => {
   cleanup();
@@ -36,6 +40,8 @@ if (typeof window !== "undefined") {
   HTMLCanvasElement.prototype.getContext = (() => null) as unknown as HTMLCanvasElement["getContext"];
 
   if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
+  window.scrollTo = (() => {}) as typeof window.scrollTo;
+  Element.prototype.scrollTo = (() => {}) as typeof Element.prototype.scrollTo;
   if (!Element.prototype.hasPointerCapture) {
     Element.prototype.hasPointerCapture = () => false;
     Element.prototype.setPointerCapture = () => {};
