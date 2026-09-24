@@ -78,7 +78,7 @@ export function SettingsPage() {
             <AppearanceSection theme={settings.data.theme} onThemeChange={(theme) => update.mutate({ theme })} />
             <ExportSettingsSection
               settings={settings.data}
-              sampleCameraName={cameras.data?.[0]?.name ?? "Front Door"}
+              sampleCameraName={cameras.data?.[0]?.name ?? strings.settings.sampleCamera}
               onChange={(patch) => update.mutate(patch)}
             />
             <CamerasSettingsSection cameras={cameras.data ?? []} groups={groups.data ?? []} />

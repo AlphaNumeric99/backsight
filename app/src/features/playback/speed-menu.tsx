@@ -14,7 +14,7 @@ import { SPEEDS } from "@/features/timeline/math";
 export function SpeedMenu({ speed, onChange }: { speed: number; onChange: (speed: number) => void }) {
   return (
     <DropdownMenu>
-      <Tooltip content={strings.playback.speed} shortcut="[ ]">
+      <Tooltip content={strings.playback.speed} shortcut={strings.keys.speed}>
         <DropdownMenuTrigger asChild>
           <button
             type="button"

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { toast } from "sonner";
@@ -130,7 +130,7 @@ function Section({
   title: string;
   count: number;
   hidden: boolean;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <AnimatePresence initial={false}>

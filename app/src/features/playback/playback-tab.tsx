@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   CalendarCheck,
@@ -334,7 +334,7 @@ export function PlaybackTab({
           <Button variant="outline" size="sm" onClick={onGoLive} disabled={!info.viewable}>
             <Radio className="text-live" />
             {strings.playback.goLive}
-            <Kbd className="ml-0.5 h-5 min-w-5 text-[10px]">L</Kbd>
+            <Kbd className="ml-0.5 h-5 min-w-5 text-[10px]">{strings.keys.live}</Kbd>
           </Button>
         </div>
 
@@ -365,7 +365,7 @@ export function PlaybackTab({
               <>
                 <OverlayButton
                   label={playing ? strings.playback.pause : strings.playback.play}
-                  shortcut="Space"
+                  shortcut={strings.keys.space}
                   onClick={() => void togglePlay()}
                   disabled={!info.viewable || segments.length === 0}
                 >
@@ -554,7 +554,9 @@ function useSimulatedPlayback({
   setPlayerState: (s: PlayerState) => void;
 }) {
   const segmentsRef = useRef(segments);
-  segmentsRef.current = segments;
+  useLayoutEffect(() => {
+    segmentsRef.current = segments;
+  }, [segments]);
   useEffect(() => {
     if (!import.meta.env.DEV || !source) return;
     const began = performance.now();

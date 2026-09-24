@@ -72,7 +72,7 @@ export function AddCameraDialog() {
       setScanId((n) => n + 1);
       add.reset();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when the dialog opens
+    // Reset only when the dialog opens.
   }, [open]);
 
   const busy = add.isPending;

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { AlertDialog as AlertPrimitive, Dialog as DialogPrimitive } from "radix-ui";
 import { AnimatePresence, motion } from "motion/react";
 import { X } from "lucide-react";
@@ -125,7 +125,7 @@ export function DialogBody({ className, children }: { className?: string; childr
 }
 
 /** A form that lays out a DialogBody and DialogFooter like the dialog itself. */
-export function DialogForm({ className, ...props }: React.ComponentProps<"form">) {
+export function DialogForm({ className, ...props }: ComponentProps<"form">) {
   return <form className={cn("flex min-h-0 flex-1 flex-col", className)} {...props} />;
 }
 

@@ -59,8 +59,7 @@ export function LiveTab({ camera }: { camera: Camera }) {
 
   const source = useMemo<StreamRequest | null>(
     () => (info.viewable ? { kind: "live", cameraId: camera.id, quality } : null),
-    // `retry` restarts the stream after an error.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // `retry` is a dependency on purpose: bumping it restarts the stream after an error.
     [info.viewable, camera.id, quality, retry],
   );
 
@@ -138,7 +137,7 @@ export function LiveTab({ camera }: { camera: Camera }) {
                 {recording.active && (
                   <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-black/55 px-2.5 text-[11px] font-semibold tabular-nums text-white">
                     <span className="size-2 animate-pulse-dot rounded-full bg-live" />
-                    REC {formatClockDuration(now - (recording.startedAt ?? now))}
+                    {strings.live.rec} {formatClockDuration(now - (recording.startedAt ?? now))}
                   </span>
                 )}
                 <span className="truncate text-[13px] font-medium tabular-nums text-white/90 text-shadow-video">

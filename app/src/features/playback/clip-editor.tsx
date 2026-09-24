@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type Ref,
+} from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { motion } from "motion/react";
 import { toast } from "sonner";
@@ -381,7 +389,7 @@ function ClipHandle({
   onKeyDown,
   active,
 }: {
-  handleRef?: React.Ref<HTMLDivElement>;
+  handleRef?: Ref<HTMLDivElement>;
   edge: "start" | "end";
   valueMs: number;
   min: number;

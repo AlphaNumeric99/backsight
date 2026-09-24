@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, Crosshair, Minus, Plus } from "lucide-react";
 import type { EventType } from "@/ipc";
 import { cn } from "@/lib/utils";
@@ -115,7 +115,10 @@ export function Timeline(props: TimelineProps) {
   const hoverRef = useRef<HTMLDivElement>(null);
   const hoverTimeRef = useRef<HTMLSpanElement>(null);
   const propsRef = useRef(props);
-  propsRef.current = props;
+  // The render loop reads the latest committed props.
+  useLayoutEffect(() => {
+    propsRef.current = props;
+  });
 
   const [hoverEvent, setHoverEvent] = useState<ParsedEvent | null>(null);
   const [detached, setDetached] = useState(false);

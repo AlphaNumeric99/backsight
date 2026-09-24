@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEventHandler,
+  type PointerEventHandler,
+} from "react";
 import {
   DndContext,
   KeyboardSensor,
@@ -194,7 +203,7 @@ export function MultiviewPage() {
                 <Button size="sm" variant="overlay" onClick={() => setFocusId(null)}>
                   <Minimize className="size-4" />
                   {strings.multiview.exitFocus}
-                  <kbd className="ml-1 rounded bg-white/15 px-1.5 text-[10.5px]">Esc</kbd>
+                  <kbd className="ml-1 rounded bg-white/15 px-1.5 text-[10.5px]">{strings.keys.esc}</kbd>
                 </Button>
               </motion.div>
             )}
@@ -288,7 +297,7 @@ function SortableTile({
   focused: boolean;
   onToggleFocus: (id: string) => void;
   compact: boolean;
-  style?: React.CSSProperties;
+  style?: CSSProperties;
   dragDisabled: boolean;
   isDraggingThis: boolean;
 }) {
@@ -296,8 +305,8 @@ function SortableTile({
     id: camera.id,
     disabled: dragDisabled,
   });
-  const onPointerDown = listeners?.onPointerDown as React.PointerEventHandler | undefined;
-  const onKeyDown = listeners?.onKeyDown as React.KeyboardEventHandler | undefined;
+  const onPointerDown = listeners?.onPointerDown as PointerEventHandler | undefined;
+  const onKeyDown = listeners?.onKeyDown as KeyboardEventHandler | undefined;
   return (
     <Tile
       nodeRef={setNodeRef}
@@ -317,7 +326,7 @@ function SortableTile({
   );
 }
 
-function EmptySlot({ style, compact, onAdd }: { style?: React.CSSProperties; compact: boolean; onAdd: () => void }) {
+function EmptySlot({ style, compact, onAdd }: { style?: CSSProperties; compact: boolean; onAdd: () => void }) {
   return (
     <div style={style} className="grid place-items-center rounded-[6px] border border-dashed border-white/10 bg-white/[0.02]">
       <button

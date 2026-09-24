@@ -22,6 +22,14 @@ export const strings = {
     onlineSummary: (online: number, total: number) => `${online} of ${total} online`,
   },
 
+  /** Key caps shown in hints and tooltips. */
+  keys: {
+    esc: "Esc",
+    space: "Space",
+    live: "L",
+    speed: "[ ]",
+  },
+
   common: {
     cancel: "Cancel",
     close: "Close",
@@ -240,6 +248,7 @@ export const strings = {
 
   live: {
     badge: "Live",
+    rec: "REC",
     quality: "Quality",
     hd: "HD",
     sd: "SD",
@@ -450,6 +459,7 @@ export const strings = {
     nameTemplateHelp: "Insert a token to build the name. The .mp4 extension is added for you.",
     nameTemplateEmpty: "The file name can't be empty.",
     preview: "Preview",
+    sampleCamera: "Front Door",
     tokens: { camera: "Camera", date: "Date", start: "Start", end: "End" },
     cacheLimit: "Thumbnail and index cache",
     cacheLimitHelp: "Older cached thumbnails are removed when the cache grows past this size.",

@@ -1,4 +1,14 @@
-import { memo, useMemo, useRef, useState, type CSSProperties, type KeyboardEventHandler, type PointerEventHandler, type Ref } from "react";
+import {
+  memo,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEventHandler,
+  type PointerEventHandler,
+  type ReactNode,
+  type Ref,
+} from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowUpRight, GripVertical, Maximize2, Minimize2, Volume2, VolumeX } from "lucide-react";
 import type { Camera, StreamQuality, StreamRequest } from "@/ipc";
@@ -29,7 +39,7 @@ export interface TileProps {
   handleProps?: { onKeyDown?: KeyboardEventHandler } & Record<string, unknown>;
 }
 
-function TileButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+function TileButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
   return (
     <Tooltip content={label}>
       <button
