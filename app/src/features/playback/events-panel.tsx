@@ -75,12 +75,17 @@ export function EventsPanel({
     getItemKey: (i) => visible[i].id,
   });
 
-  // Keep the selected event in view when it changes from elsewhere (timeline clicks).
+  // Bring the selected event into view when the selection changes (e.g. from a timeline
+  // click), but not on every data refresh, so it never fights the user's own scrolling.
+  const visibleRef = useRef(visible);
+  useEffect(() => {
+    visibleRef.current = visible;
+  });
   useEffect(() => {
     if (!selectedId) return;
-    const i = visible.findIndex((e) => e.id === selectedId);
+    const i = visibleRef.current.findIndex((e) => e.id === selectedId);
     if (i >= 0) virtualizer.scrollToIndex(i, { align: "auto" });
-  }, [selectedId, visible, virtualizer]);
+  }, [selectedId, virtualizer]);
 
   const focusRow = (index: number) => {
     const i = Math.max(0, Math.min(visible.length - 1, index));

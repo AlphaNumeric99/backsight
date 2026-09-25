@@ -1,15 +1,18 @@
-import { useLayoutEffect, useState, type RefObject } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export interface Size {
   width: number;
   height: number;
 }
 
-/** Tracks an element's content-box size. */
-export function useElementSize<T extends HTMLElement>(ref: RefObject<T | null>): Size {
+/**
+ * Tracks an element's size. Returns a callback ref, so it keeps working when the element is
+ * mounted later or replaced.
+ */
+export function useElementSize<T extends HTMLElement>(): [(el: T | null) => void, Size] {
+  const [el, setEl] = useState<T | null>(null);
   const [size, setSize] = useState<Size>({ width: 0, height: 0 });
-  useLayoutEffect(() => {
-    const el = ref.current;
+  useEffect(() => {
     if (!el) return;
     const update = () => {
       const rect = el.getBoundingClientRect();
@@ -23,6 +26,7 @@ export function useElementSize<T extends HTMLElement>(ref: RefObject<T | null>):
     const observer = new ResizeObserver(update);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [ref]);
-  return size;
+  }, [el]);
+  const ref = useCallback((node: T | null) => setEl(node), []);
+  return [ref, size];
 }

@@ -169,7 +169,8 @@ function FindStep({
     queryFn: () => api.discover(3000),
     enabled,
     staleTime: Infinity,
-    gcTime: 0,
+    // Keep results while the dialog is open, so going back from the next step doesn't rescan.
+    gcTime: 60_000,
     retry: false,
   });
   const [manual, setManual] = useState("");

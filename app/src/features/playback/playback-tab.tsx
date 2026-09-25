@@ -119,11 +119,22 @@ export function PlaybackTab({
     [clock, day, segments, startAt],
   );
 
-  // Choose where to start once a day's index arrives.
+  // Choose where to start once a day's index arrives. Until then, stop the previous day's
+  // stream and park the playhead at the start of the new day.
   const positionedFor = useRef<string | null>(null);
+  const parkedFor = useRef<string | null>(null);
   useEffect(() => {
     const data = index.data;
-    if (!data || positionedFor.current === date) return;
+    if (positionedFor.current === date) return;
+    if (!data) {
+      if (parkedFor.current !== date && positionedFor.current !== null) {
+        parkedFor.current = date;
+        setOrigin(null);
+        setSelectedId(null);
+        clock.seek(day.start);
+      }
+      return;
+    }
     positionedFor.current = date;
     const segs = data.segments;
     const wanted = initialTime !== undefined && initialTime >= day.start && initialTime < day.end ? initialTime : undefined;

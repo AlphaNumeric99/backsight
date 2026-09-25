@@ -52,8 +52,15 @@ export function MultiviewPage() {
   const [focusId, setFocusId] = useState<string | null>(null);
   const [audioId, setAudioId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const areaRef = useRef<HTMLDivElement>(null);
-  const size = useElementSize(areaRef);
+  const areaRef = useRef<HTMLDivElement | null>(null);
+  const [measureArea, size] = useElementSize<HTMLDivElement>();
+  const setArea = useCallback(
+    (el: HTMLDivElement | null) => {
+      areaRef.current = el;
+      measureArea(el);
+    },
+    [measureArea],
+  );
   const [fullscreen, toggleFullscreen] = useFullscreen(areaRef);
 
   useEffect(() => {
@@ -187,7 +194,7 @@ export function MultiviewPage() {
         </Card>
       ) : (
         <div
-          ref={areaRef}
+          ref={setArea}
           data-theme="dark"
           className="theme-scope relative grid min-h-[320px] flex-1 place-items-center overflow-hidden rounded-card bg-[#030405]"
         >
