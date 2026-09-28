@@ -57,6 +57,8 @@ pub struct Thumbnails {
 
 enum Fetched {
     Image(Vec<u8>),
+    /// The image arrived but the session didn't end cleanly; don't reuse it.
+    Stale(Vec<u8>),
     /// The camera said there is no thumbnail for this time.
     None,
     /// Couldn't tell (timeout, error): try again later.
@@ -127,21 +129,29 @@ async fn open_session(handle: &CameraHandle) -> Option<MediaSession> {
     }
 }
 
+/// Asks for one thumbnail and reads the camera's answer through its "finished"
+/// notification, so the session is clean for the next request. (Returning as soon as the
+/// JPEG arrived left that notification behind, and the next request mistook it for
+/// "no thumbnail".)
 async fn fetch(session: &mut MediaSession, request: &StreamRequest) -> Fetched {
     if session.start(request).await.is_err() {
         return Fetched::Unknown;
     }
     let deadline = tokio::time::Instant::now() + FETCH_TIMEOUT;
+    let mut image = None;
     loop {
         match tokio::time::timeout_at(deadline, session.next_part()).await {
             Ok(Ok(Some(StreamPart::Other { content_type, data })))
                 if content_type == "image/jpeg" =>
             {
-                return Fetched::Image(data.to_vec());
+                image = Some(data.to_vec());
             }
-            Ok(Ok(Some(part))) if part.is_finished() => return Fetched::None,
+            Ok(Ok(Some(part))) if part.is_finished() => {
+                return image.map_or(Fetched::None, Fetched::Image);
+            }
             Ok(Ok(Some(_))) => {}
-            _ => return Fetched::Unknown,
+            // Got the picture but not the end marker: use it, but don't reuse the session.
+            _ => return image.map_or(Fetched::Unknown, Fetched::Stale),
         }
     }
 }
@@ -201,6 +211,11 @@ async fn run_worker(
         };
         match fetch(active, &request).await {
             Fetched::Image(bytes) => {
+                save(&image_path, &bytes).await;
+                let _ = job.reply.send(Some(bytes));
+            }
+            Fetched::Stale(bytes) => {
+                session = None;
                 save(&image_path, &bytes).await;
                 let _ = job.reply.send(Some(bytes));
             }
