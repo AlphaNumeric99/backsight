@@ -299,7 +299,11 @@ function StatusTiles({
     {
       icon: <SdCardIcon />,
       label: strings.live.tiles.storage,
-      value: hasCard ? strings.live.tiles.used(formatPercent(storage.fraction)) : storage.text,
+      value: !hasCard
+        ? storage.text
+        : camera.storage?.loopRecording && storage.fraction >= 0.9
+          ? strings.live.tiles.loop
+          : strings.live.tiles.used(formatPercent(storage.fraction)),
       sub: [
         camera.storage?.recordingMode ? strings.storage.mode[camera.storage.recordingMode] : undefined,
         hasCard ? formatBytes(camera.storage!.totalBytes) : undefined,

@@ -40,6 +40,8 @@ export interface StorageInfo {
   totalBytes: number;
   freeBytes: number;
   recordingMode?: "continuous" | "detection" | "off";
+  /** The card overwrites its oldest footage when full, so a full card is normal. */
+  loopRecording?: boolean;
 }
 
 export interface Camera {

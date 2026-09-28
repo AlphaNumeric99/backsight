@@ -124,6 +124,7 @@ export const strings = {
   storage: {
     label: "SD card",
     usage: (used: string, total: string) => `${used} of ${total}`,
+    loop: (total: string) => `${total} · loop recording`,
     none: "No SD card",
     unformatted: "Needs formatting",
     full: "Full",
@@ -279,6 +280,7 @@ export const strings = {
     tiles: {
       noVideo: "No video yet",
       used: (pct: string) => `${pct} used`,
+      loop: "Loop recording",
       connection: "Connection",
       stream: "Stream",
       storage: "SD card",

@@ -262,6 +262,10 @@ impl CameraManager {
                 "getLensMaskConfig",
                 serde_json::json!({ "lens_mask": { "name": ["lens_mask_info"] } }),
             ),
+            (
+                "getRecordPlan",
+                serde_json::json!({ "record_plan": { "name": ["chn1_channel"] } }),
+            ),
         ];
         match client.execute_many(&calls).await {
             Ok(results) => {
@@ -272,6 +276,9 @@ impl CameraManager {
                 }
                 if let Some(Ok(sd)) = results.get(1) {
                     info.storage = parse_storage(sd);
+                }
+                if let (Some(storage), Some(Ok(plan))) = (info.storage.as_mut(), results.get(3)) {
+                    storage.recording_mode = parse_record_plan(plan);
                 }
                 let privacy = results
                     .get(2)
@@ -476,6 +483,35 @@ pub fn parse_clock(value: &Value, host_now: i64) -> Option<ClockInfo> {
     })
 }
 
+/// Reads `getRecordPlan`: a weekly schedule of `"HHMM-HHMM:type"` slots per day, where
+/// type 1 is continuous ("timed") recording and 2 is recording on detection.
+pub fn parse_record_plan(value: &Value) -> Option<String> {
+    let plan = value.pointer("/record_plan/chn1_channel")?;
+    if plan.get("enabled").and_then(Value::as_str) != Some("on") {
+        return Some("off".into());
+    }
+    let days = [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+    ];
+    let slots: String = days
+        .iter()
+        .filter_map(|day| plan.get(*day).and_then(Value::as_str))
+        .collect();
+    Some(if slots.contains(":1") {
+        "continuous".into()
+    } else if slots.contains(":2") {
+        "detection".into()
+    } else {
+        "off".into()
+    })
+}
+
 /// Parses sizes such as `"59.5GB"`, `"512MB"` or plain numbers (MB).
 fn parse_size(value: &Value) -> Option<u64> {
     if let Some(n) = value.as_f64() {
@@ -529,6 +565,7 @@ pub fn parse_storage(value: &Value) -> Option<StorageInfo> {
         total_bytes: size("total_space"),
         free_bytes: size("free_space"),
         recording_mode: None,
+        loop_recording: text("loop_record_status") == "1",
     })
 }
 
@@ -551,6 +588,19 @@ mod tests {
     }
 
     #[test]
+    fn record_plan_modes() {
+        // A C325WB set to record continuously all week.
+        let plan = json!({ "record_plan": { "chn1_channel": {
+            "enabled": "on", "monday": "[\"0000-2400:1\"]", "sunday": "[\"0000-2400:1\"]"
+        } } });
+        assert_eq!(parse_record_plan(&plan).as_deref(), Some("continuous"));
+        let plan = json!({ "record_plan": { "chn1_channel": { "enabled": "on", "monday": "[\"0000-2400:2\"]" } } });
+        assert_eq!(parse_record_plan(&plan).as_deref(), Some("detection"));
+        let plan = json!({ "record_plan": { "chn1_channel": { "enabled": "off" } } });
+        assert_eq!(parse_record_plan(&plan).as_deref(), Some("off"));
+    }
+
+    #[test]
     fn storage_prefers_exact_sizes() {
         // Trimmed from a C325WB's getSdCardStatus.
         let sd = json!({ "harddisk_manage": { "hd_info": [ { "hd_info_1": {
@@ -562,6 +612,7 @@ mod tests {
         assert_eq!(info.total_bytes, 244_007_829_504);
         assert_eq!(info.free_bytes, 38_987_620);
         assert_eq!(info.status, "normal");
+        assert!(info.loop_recording);
     }
 
     #[test]

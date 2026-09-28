@@ -14,6 +14,10 @@ export function storageSummary(storage?: StorageInfo): {
   if (storage.status === "error") return { text: strings.storage.error, fraction: 0, tone: "danger" };
   const used = Math.max(0, storage.totalBytes - storage.freeBytes);
   const fraction = storage.totalBytes > 0 ? used / storage.totalBytes : 0;
+  // With loop recording a full card is the steady state: the oldest footage is overwritten.
+  if (storage.loopRecording && (storage.status === "full" || fraction >= 0.9)) {
+    return { text: strings.storage.loop(formatBytes(storage.totalBytes)), fraction, tone: "normal" };
+  }
   const text =
     storage.status === "full"
       ? strings.storage.full

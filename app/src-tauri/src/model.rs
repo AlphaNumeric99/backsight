@@ -50,6 +50,8 @@ pub struct StorageInfo {
     pub free_bytes: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recording_mode: Option<String>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub loop_recording: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
