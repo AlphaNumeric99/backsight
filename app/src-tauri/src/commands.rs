@@ -160,11 +160,12 @@ pub async fn cancel_export(state: State<'_, AppState>, id: String) -> ApiResult<
 
 #[tauri::command]
 pub async fn open_stream(
+    webview: tauri::Webview,
     state: State<'_, AppState>,
     req: crate::model::StreamRequest,
     channel: tauri::ipc::Channel,
 ) -> ApiResult<String> {
-    state.streams.open(req, channel)
+    state.streams.open(req, channel, webview.label())
 }
 
 #[tauri::command]

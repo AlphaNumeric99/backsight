@@ -15,6 +15,7 @@ use std::sync::Arc;
 
 use tauri::Manager;
 use tauri::http::{Response, StatusCode, header};
+use tauri::webview::PageLoadEvent;
 
 use crate::cameras::CameraManager;
 use crate::commands::AppState;
@@ -89,6 +90,14 @@ pub fn run() {
                 default_export_dir,
             });
             Ok(())
+        })
+        .on_page_load(|webview, payload| {
+            // Not raised for route (hash) changes, only when a new document loads.
+            if payload.event() == PageLoadEvent::Started
+                && let Some(state) = webview.try_state::<AppState>()
+            {
+                state.streams.close_webview(webview.label());
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::list_cameras,

@@ -76,6 +76,8 @@ Rules the player relies on:
 | `cameras.rs` | Saved cameras, their clients, 60 s status polling, `backsight://event` events |
 | `recordings.rs` | Days with footage and the day index (segments + detection events), cached in SQLite |
 | `thumbnails.rs` | Detection thumbnails via the `thumb://<camera>/<start>` scheme, disk-cached |
+| `streams.rs` | Live and playback streams to the player (1× via `playback`, other speeds via `download` paced here). Streams end when the page closes them or its webview reloads |
+| `exports.rs` | Clip export jobs: `download` → MP4, one job at a time per camera, `export-progress` events |
 | `audio_aac.rs` | 48 kHz upsampling + AAC encoding (Media Foundation) for exports |
 | `db.rs` / `secrets.rs` | SQLite storage / OS keychain for passwords |
 
@@ -92,6 +94,7 @@ the same address is refused.
 
 - Control requests go out one at a time per camera.
 - A failed login is never retried automatically (10 failures lock the camera for ~30 min).
-- One media session per camera on port 8800, and only one client may use SD playback at a time.
-  Interactive live view and playback pre-empt background exports, which resume afterwards.
+- The camera limits SD playback clients (`-71101`/`-71102`). A refusal shows as "Playback is
+  busy" and is not retried in a loop. Live view and an SD download can run side by side (seen
+  on C325WB); exports queue one at a time per camera.
 - At most 3 local live viewers per camera, and RTSP clients such as NVR software count.

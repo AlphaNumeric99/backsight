@@ -9,6 +9,9 @@
 //! Other speeds use the `download` request (the camera sends ~7× real time with every
 //! frame) and pace frames here; the download window acknowledgements turn our pacing
 //! into backpressure on the camera. Above 4× only keyframes are sent. Audio plays at 1×.
+//!
+//! A stream runs until the page closes it, the camera ends it, or the webview that opened it
+//! loads a new document (see `close_webview`).
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -145,7 +148,13 @@ fn parse_start(start: &str) -> ApiResult<i64> {
 pub struct Streams {
     cameras: Arc<CameraManager>,
     player_id: String,
-    tasks: Mutex<HashMap<String, tauri::async_runtime::JoinHandle<()>>>,
+    tasks: Mutex<HashMap<String, Task>>,
+}
+
+struct Task {
+    /// Label of the webview whose channel receives the stream.
+    webview: String,
+    handle: tauri::async_runtime::JoinHandle<()>,
 }
 
 impl Streams {
@@ -159,7 +168,12 @@ impl Streams {
         }
     }
 
-    pub fn open(self: &Arc<Self>, request: StreamRequest, channel: Channel) -> ApiResult<String> {
+    pub fn open(
+        self: &Arc<Self>,
+        request: StreamRequest,
+        channel: Channel,
+        webview: &str,
+    ) -> ApiResult<String> {
         let camera_id = match &request {
             StreamRequest::Live { camera_id, .. } | StreamRequest::Playback { camera_id, .. } => {
                 camera_id.clone()
@@ -193,16 +207,38 @@ impl Streams {
             }
             streams.tasks.lock().expect("tasks lock").remove(&task_id);
         });
-        self.tasks
-            .lock()
-            .expect("tasks lock")
-            .insert(id.clone(), task);
+        self.tasks.lock().expect("tasks lock").insert(
+            id.clone(),
+            Task {
+                webview: webview.to_owned(),
+                handle: task,
+            },
+        );
         Ok(id)
     }
 
     pub fn close(&self, id: &str) {
         if let Some(task) = self.tasks.lock().expect("tasks lock").remove(id) {
-            task.abort();
+            task.handle.abort();
+        }
+    }
+
+    /// Stops every stream a webview opened. Called when it starts loading a document: a reload
+    /// leaves the old page's streams with no receiver and nobody to close them, and they would
+    /// otherwise hold the camera's media session until the app exits.
+    pub fn close_webview(&self, webview: &str) {
+        let mut tasks = self.tasks.lock().expect("tasks lock");
+        let mut closed = 0;
+        for (_, task) in tasks.extract_if(|_, task| task.webview == webview) {
+            task.handle.abort();
+            closed += 1;
+        }
+        if closed > 0 {
+            tracing::debug!(
+                webview,
+                closed,
+                "closed streams left open by the previous page"
+            );
         }
     }
 
