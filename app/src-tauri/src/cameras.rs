@@ -306,6 +306,13 @@ impl CameraManager {
         match client.execute_many(&calls).await {
             Ok(results) => {
                 let mut info = handle.info.read().expect("info lock").clone();
+                let shown = |info: &LiveInfo| {
+                    (
+                        info.storage.clone(),
+                        info.clock.map(|c| c.utc_offset_minutes),
+                    )
+                };
+                let before = shown(&info);
                 if let Some(Ok(clock)) = results.first() {
                     info.clock =
                         parse_clock(clock, jiff::Timestamp::now().as_second()).or(info.clock);
@@ -322,6 +329,7 @@ impl CameraManager {
                     .and_then(|v| v.pointer("/lens_mask/lens_mask_info/enabled"))
                     .and_then(Value::as_str)
                     == Some("on");
+                let after = shown(&info);
                 *handle.info.write().expect("info lock") = info;
                 let mut status = CameraStatus::new(if privacy {
                     CameraState::Privacy
@@ -330,6 +338,14 @@ impl CameraManager {
                 });
                 status.last_seen = Some(now_rfc3339());
                 self.set_status(handle, status);
+                if after != before {
+                    let (storage, utc_offset_minutes) = after;
+                    self.emit(AppEvent::CameraInfo {
+                        camera_id: handle.id.clone(),
+                        storage,
+                        utc_offset_minutes,
+                    });
+                }
             }
             Err(err) => {
                 let api: ApiError = err.into();
@@ -575,12 +591,23 @@ fn parse_size(value: &Value) -> Option<u64> {
         .map(|n| (n * multiplier as f64) as u64)
 }
 
-/// Reads `getSdCardStatus` → `harddisk_manage.hd_info`, a list of single-key objects.
+/// Reads `getSdCardStatus` → `harddisk_manage.hd_info`, a list of single-key objects. `None`
+/// means the reply didn't say; an empty list means there is no card.
 pub fn parse_storage(value: &Value) -> Option<StorageInfo> {
     let list = value.pointer("/harddisk_manage/hd_info")?.as_array()?;
-    let disk = list
+    let Some(disk) = list
         .iter()
-        .find_map(|item| item.as_object()?.values().next())?;
+        .find_map(|item| item.as_object()?.values().next())
+    else {
+        return Some(StorageInfo {
+            present: false,
+            status: "none".into(),
+            total_bytes: 0,
+            free_bytes: 0,
+            recording_mode: None,
+            loop_recording: false,
+        });
+    };
     let text = |key: &str| disk.get(key).and_then(Value::as_str).unwrap_or("");
     let status = match text("status") {
         "insufficient" | "full" => "full",
@@ -650,6 +677,15 @@ mod tests {
         assert_eq!(info.free_bytes, 38_987_620);
         assert_eq!(info.status, "normal");
         assert!(info.loop_recording);
+    }
+
+    #[test]
+    fn storage_empty_slot_and_unknown() {
+        let empty = json!({ "harddisk_manage": { "hd_info": [] } });
+        let info = parse_storage(&empty).unwrap();
+        assert!(!info.present);
+        assert_eq!(info.status, "none");
+        assert!(parse_storage(&json!({ "harddisk_manage": {} })).is_none());
     }
 
     #[test]

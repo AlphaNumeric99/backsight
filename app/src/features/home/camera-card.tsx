@@ -139,7 +139,7 @@ export function CameraCard({
             {groupNames && ` · ${groupNames}`}
           </p>
         </div>
-        <StorageUsage storage={camera.storage} className="mt-auto" />
+        <StorageUsage storage={camera.storage} state={camera.status.state} className="mt-auto" />
       </div>
     </motion.article>
   );

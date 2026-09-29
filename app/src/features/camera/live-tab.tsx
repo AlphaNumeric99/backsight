@@ -280,7 +280,7 @@ function StatusTiles({
   now: number;
 }) {
   const info = useStatusInfo(camera.status);
-  const storage = storageSummary(camera.storage);
+  const storage = storageSummary(camera.storage, camera.status.state);
   const offset = camera.utcOffsetMinutes ?? localOffsetMinutes();
   const resolution = formatResolution(stats?.width, stats?.height);
   const hasCard = Boolean(camera.storage?.present && camera.storage.status === "normal");

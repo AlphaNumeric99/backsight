@@ -271,6 +271,14 @@ pub enum AppEvent {
         status: CameraStatus,
     },
     CamerasChanged,
+    /// What the status poll reads besides the state: SD card and clock.
+    CameraInfo {
+        camera_id: CameraId,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        storage: Option<StorageInfo>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        utc_offset_minutes: Option<i32>,
+    },
     /// A new preview was saved for the camera.
     CameraPreview {
         camera_id: CameraId,
@@ -300,6 +308,15 @@ mod tests {
         assert_eq!(
             serde_json::to_value(AppEvent::CamerasChanged).unwrap(),
             json!({ "type": "cameras-changed" })
+        );
+        let info = AppEvent::CameraInfo {
+            camera_id: "c1".into(),
+            storage: None,
+            utc_offset_minutes: Some(330),
+        };
+        assert_eq!(
+            serde_json::to_value(&info).unwrap(),
+            json!({ "type": "camera-info", "cameraId": "c1", "utcOffsetMinutes": 330 })
         );
         let preview = AppEvent::CameraPreview {
             camera_id: "c1".into(),

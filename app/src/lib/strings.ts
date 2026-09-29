@@ -127,6 +127,8 @@ export const strings = {
     usage: (used: string, total: string) => `${used} of ${total}`,
     loop: (total: string) => `${total} · loop recording`,
     none: "No SD card",
+    checking: "Checking…",
+    unknown: "Unknown",
     unformatted: "Needs formatting",
     full: "Full",
     error: "Card error",

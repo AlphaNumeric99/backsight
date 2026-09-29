@@ -9,8 +9,8 @@ import { queryKeys } from "./keys";
 import { upsertJob } from "./exports";
 
 /**
- * Keeps the query cache in sync with backend events: camera status changes, camera list
- * changes, new previews and export progress. Mounted once, inside the router.
+ * Keeps the query cache in sync with backend events: camera status and SD card changes,
+ * camera list changes, new previews and export progress. Mounted once, inside the router.
  */
 export function ApiEventBridge() {
   const qc = useQueryClient();
@@ -33,6 +33,13 @@ export function ApiEventBridge() {
           void qc.invalidateQueries({ queryKey: queryKeys.cameras() });
           void qc.invalidateQueries({ queryKey: queryKeys.groups() });
           break;
+        case "camera-info": {
+          const { storage, utcOffsetMinutes } = event;
+          const apply = (c: Camera) => (c.id === event.cameraId ? { ...c, storage, utcOffsetMinutes } : c);
+          qc.setQueryData<Camera[]>(queryKeys.cameras(), (list) => list?.map(apply));
+          qc.setQueryData<Camera>(queryKeys.camera(event.cameraId), (c) => (c ? apply(c) : c));
+          break;
+        }
         case "camera-preview": {
           const { snapshotUrl, snapshotAt } = event;
           const apply = (c: Camera) => (c.id === event.cameraId ? { ...c, snapshotUrl, snapshotAt } : c);

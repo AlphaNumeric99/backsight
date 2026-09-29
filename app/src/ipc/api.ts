@@ -212,6 +212,8 @@ export interface Settings {
 export type AppEvent =
   | { type: "camera-status"; cameraId: CameraId; status: CameraStatus }
   | { type: "cameras-changed" }
+  /** What the status poll reads besides the state; an absent field is unknown. */
+  | { type: "camera-info"; cameraId: CameraId; storage?: StorageInfo; utcOffsetMinutes?: number }
   | { type: "camera-preview"; cameraId: CameraId; snapshotUrl: string; snapshotAt: IsoDateTime }
   | { type: "export-progress"; job: ExportJob };
 
