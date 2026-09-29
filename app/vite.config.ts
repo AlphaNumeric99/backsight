@@ -1,15 +1,30 @@
 /// <reference types="vitest/config" />
+import { rmSync } from "node:fs";
 import { fileURLToPath, URL } from "node:url";
 import process from "node:process";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 const host = process.env.TAURI_DEV_HOST;
 
+/**
+ * The mock backend streams video fixtures from `public/fixtures/` (~1.5 MB). The desktop
+ * app never uses the mock, so leave them out of release builds (the harness keeps them).
+ */
+const dropDevFixtures = (): Plugin => ({
+  name: "backsight:drop-dev-fixtures",
+  apply: "build",
+  closeBundle() {
+    if (!process.env.BACKSIGHT_HARNESS) {
+      rmSync(fileURLToPath(new URL("./dist/fixtures", import.meta.url)), { recursive: true, force: true });
+    }
+  },
+});
+
 // https://vite.dev/config/
 export default defineConfig(() => ({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), dropDevFixtures()],
 
   resolve: {
     alias: {
@@ -43,6 +58,8 @@ export default defineConfig(() => ({
   worker: { format: "es" as const },
 
   build: {
+    // The app loads its bundle from disk, not the network, so one ~1 MB chunk is fine.
+    chunkSizeWarningLimit: 1500,
     rolldownOptions: {
       input: {
         main: "index.html",
