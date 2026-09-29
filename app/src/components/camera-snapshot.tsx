@@ -4,23 +4,26 @@ import type { Camera } from "@/ipc";
 import { cn } from "@/lib/utils";
 import { strings } from "@/lib/strings";
 
-/** The camera's latest cached frame, or a quiet placeholder when there isn't one. */
+/** The camera's preview (its latest captured frame), or a quiet placeholder when there isn't one. */
 export function CameraSnapshot({
   camera,
   className,
   imgClassName,
   showPlaceholderLabel = true,
+  placeholderLabel = strings.home.noPreview,
   bare = false,
 }: {
   camera: Pick<Camera, "snapshotUrl" | "name">;
   className?: string;
   imgClassName?: string;
   showPlaceholderLabel?: boolean;
+  placeholderLabel?: string;
   /** Placeholder without its icon and label, when something else is drawn on top. */
   bare?: boolean;
 }) {
-  const [failed, setFailed] = useState(false);
-  const url = !failed ? camera.snapshotUrl : undefined;
+  // Remember which URL failed, so a newer preview gets its chance.
+  const [failedUrl, setFailedUrl] = useState<string>();
+  const url = camera.snapshotUrl !== failedUrl ? camera.snapshotUrl : undefined;
   return (
     <div className={cn("relative size-full overflow-hidden bg-video", className)}>
       {url ? (
@@ -30,11 +33,11 @@ export function CameraSnapshot({
           draggable={false}
           decoding="async"
           loading="lazy"
-          onError={() => setFailed(true)}
+          onError={() => setFailedUrl(url)}
           className={cn("size-full object-cover", imgClassName)}
         />
       ) : (
-        <SnapshotPlaceholder label={showPlaceholderLabel ? strings.home.noPreview : undefined} bare={bare} />
+        <SnapshotPlaceholder label={showPlaceholderLabel ? placeholderLabel : undefined} bare={bare} />
       )}
     </div>
   );

@@ -5,6 +5,7 @@ mod db;
 mod error;
 mod exports;
 mod model;
+mod previews;
 mod recordings;
 mod secrets;
 mod streams;
@@ -22,7 +23,8 @@ use crate::commands::AppState;
 use crate::db::Db;
 use crate::thumbnails::Thumbnails;
 
-/// Serves `thumb://<camera>/<start>` from the thumbnail cache or the camera.
+/// The `thumb` scheme: detection thumbnails at `/<camera>/<start>`, from the cache or the
+/// camera, and camera previews at `/preview/<camera>/<saved_at>`.
 fn thumbnail_protocol(
     ctx: tauri::UriSchemeContext<'_, tauri::Wry>,
     request: tauri::http::Request<Vec<u8>>,
@@ -37,13 +39,18 @@ fn thumbnail_protocol(
                 .body(Vec::new())
                 .expect("response")
         };
-        let Some((camera_id, start)) = thumbnails::parse_path(&path) else {
-            return responder.respond(not_found());
-        };
         let Some(state) = app.try_state::<AppState>() else {
             return responder.respond(not_found());
         };
-        match state.thumbnails.get(&camera_id, start).await {
+        let jpeg = if let Some(camera_id) = previews::parse_path(&path) {
+            state.cameras.preview(&camera_id)
+        } else if let Some((camera_id, start)) = thumbnails::parse_path(&path) {
+            state.thumbnails.get(&camera_id, start).await
+        } else {
+            None
+        };
+        match jpeg {
+            // Both URL kinds name one immutable picture (previews carry their save time).
             Some(jpeg) => responder.respond(
                 Response::builder()
                     .header(header::CONTENT_TYPE, "image/jpeg")
@@ -72,11 +79,13 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             let db = Arc::new(Db::open(&data_dir.join("backsight.db"))?);
-            let cameras =
-                CameraManager::start(app.handle().clone(), db.clone()).map_err(|e| e.message)?;
+            let cache_dir = app.path().app_cache_dir()?;
+            let previews = previews::Previews::new(cache_dir.join("previews"));
+            let cameras = CameraManager::start(app.handle().clone(), db.clone(), previews)
+                .map_err(|e| e.message)?;
             let default_export_dir = commands::default_export_dir(app.handle());
             let thumbnails = Arc::new(Thumbnails::new(
-                app.path().app_cache_dir()?.join("thumbnails"),
+                cache_dir.join("thumbnails"),
                 cameras.clone(),
             ));
             let streams = Arc::new(streams::Streams::new(cameras.clone()));
@@ -114,6 +123,7 @@ pub fn run() {
             commands::update_settings,
             commands::list_exports,
             commands::save_snapshot,
+            commands::save_preview,
             commands::reveal_export,
             commands::open_stream,
             commands::close_stream,

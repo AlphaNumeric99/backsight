@@ -12,7 +12,7 @@ import {
 import { Link } from "@tanstack/react-router";
 import { ArrowUpRight, GripVertical, Maximize2, Minimize2, Volume2, VolumeX } from "lucide-react";
 import type { Camera, StreamQuality, StreamRequest } from "@/ipc";
-import type { PlayerStats } from "@/player/types";
+import type { PlayerState, PlayerStats, VideoSurfaceHandle } from "@/player/types";
 import { VideoSurface } from "@/player/VideoSurface";
 import { cn } from "@/lib/utils";
 import { strings } from "@/lib/strings";
@@ -20,6 +20,10 @@ import { formatBitrate } from "@/lib/format";
 import { useStatusInfo } from "@/components/camera-status";
 import { SnapshotPlaceholder } from "@/components/camera-snapshot";
 import { Tooltip } from "@/components/ui/tooltip";
+import { useLivePreview } from "@/features/previews/use-live-preview";
+
+/** Tiles refresh their camera's preview less often than the Live page. */
+const TILE_PREVIEW_EVERY_MS = 2 * 60_000;
 
 export interface TileProps {
   camera: Camera;
@@ -76,11 +80,14 @@ export const Tile = memo(function Tile({
 }: TileProps) {
   const info = useStatusInfo(camera.status);
   const [bitrate, setBitrate] = useState<number | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const surfaceRef = useRef<VideoSurfaceHandle>(null);
   const last = useRef(0);
   const source = useMemo<StreamRequest | null>(
     () => (info.viewable ? { kind: "live", cameraId: camera.id, quality } : null),
     [info.viewable, camera.id, quality],
   );
+  useLivePreview(camera.id, surfaceRef, playing, TILE_PREVIEW_EVERY_MS);
   const onStats = (s: PlayerStats) => {
     const now = performance.now();
     if (now - last.current < 1000) return;
@@ -102,10 +109,12 @@ export const Tile = memo(function Tile({
       )}
     >
       <VideoSurface
+        ref={surfaceRef}
         source={source}
         muted={muted}
         fit="cover"
         posterUrl={camera.snapshotUrl}
+        onState={(state: PlayerState) => setPlaying(state.kind === "playing")}
         onStats={onStats}
         className="size-full"
       />

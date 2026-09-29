@@ -80,6 +80,9 @@ pub struct Camera {
     pub time_zone: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub snapshot_url: Option<String>,
+    /// When the preview at `snapshot_url` was captured (RFC 3339, UTC).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snapshot_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -268,6 +271,12 @@ pub enum AppEvent {
         status: CameraStatus,
     },
     CamerasChanged,
+    /// A new preview was saved for the camera.
+    CameraPreview {
+        camera_id: CameraId,
+        snapshot_url: String,
+        snapshot_at: String,
+    },
     ExportProgress {
         job: ExportJob,
     },
@@ -291,6 +300,20 @@ mod tests {
         assert_eq!(
             serde_json::to_value(AppEvent::CamerasChanged).unwrap(),
             json!({ "type": "cameras-changed" })
+        );
+        let preview = AppEvent::CameraPreview {
+            camera_id: "c1".into(),
+            snapshot_url: "thumb://localhost/preview/c1/1".into(),
+            snapshot_at: "2026-09-29T06:00:00Z".into(),
+        };
+        assert_eq!(
+            serde_json::to_value(&preview).unwrap(),
+            json!({
+                "type": "camera-preview",
+                "cameraId": "c1",
+                "snapshotUrl": "thumb://localhost/preview/c1/1",
+                "snapshotAt": "2026-09-29T06:00:00Z"
+            })
         );
     }
 

@@ -240,6 +240,49 @@ describe("exports", () => {
   });
 });
 
+describe("previews", () => {
+  afterEach(() => {
+    Reflect.deleteProperty(URL, "createObjectURL");
+    Reflect.deleteProperty(URL, "revokeObjectURL");
+  });
+
+  it("show the captured frame and announce it", async () => {
+    Object.defineProperty(URL, "createObjectURL", { value: () => "blob:preview-1", configurable: true });
+    Object.defineProperty(URL, "revokeObjectURL", { value: () => {}, configurable: true });
+    const api = makeApi();
+    const events: AppEvent[] = [];
+    api.subscribe((e) => events.push(e));
+    const cam = (await api.listCameras()).find((c) => !c.snapshotUrl)!;
+
+    await api.savePreview(cam.id, new Blob([new Uint8Array([0xff, 0xd8, 0xff])], { type: "image/jpeg" }));
+
+    const after = await api.getCamera(cam.id);
+    expect(after.snapshotUrl).toBe("blob:preview-1");
+    expect(Date.parse(after.snapshotAt!)).toBe(NOW);
+    expect(events).toContainEqual({
+      type: "camera-preview",
+      cameraId: cam.id,
+      snapshotUrl: "blob:preview-1",
+      snapshotAt: after.snapshotAt,
+    });
+  });
+
+  it("keep a drawn scene but record the capture time", async () => {
+    const api = makeApi();
+    const cam = (await api.listCameras()).find((c) => c.snapshotUrl?.startsWith("data:"))!;
+    await api.savePreview(cam.id, new Blob([new Uint8Array([0xff, 0xd8, 0xff])]));
+    const after = await api.getCamera(cam.id);
+    expect(after.snapshotUrl).toBe(cam.snapshotUrl);
+    expect(after.snapshotAt).toMatch(ISO_UTC);
+  });
+
+  it("reject an empty image", async () => {
+    const api = makeApi();
+    const [cam] = await api.listCameras();
+    await expect(api.savePreview(cam.id, new Blob([]))).rejects.toMatchObject({ code: "invalid_input" });
+  });
+});
+
 describe("settings", () => {
   it("persists to storage", async () => {
     const storage = memoryStorage();

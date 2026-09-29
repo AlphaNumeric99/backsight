@@ -13,7 +13,16 @@ import { StatusPill, useStatusInfo } from "@/components/camera-status";
 import { StorageUsage } from "@/components/storage-usage";
 import { useUpdateCamera } from "@/queries/cameras";
 
-export function CameraCard({ camera, groups }: { camera: Camera; groups: CameraGroup[] }) {
+export function CameraCard({
+  camera,
+  groups,
+  capturing = false,
+}: {
+  camera: Camera;
+  groups: CameraGroup[];
+  /** A preview is being grabbed for this camera right now. */
+  capturing?: boolean;
+}) {
   const info = useStatusInfo(camera.status);
   const update = useUpdateCamera();
   const groupNames = camera.groupIds
@@ -38,6 +47,7 @@ export function CameraCard({ camera, groups }: { camera: Camera; groups: CameraG
       <div className="relative aspect-video overflow-hidden bg-video">
         <CameraSnapshot
           camera={camera}
+          placeholderLabel={capturing ? strings.home.gettingPreview : strings.home.noPreview}
           bare={!info.viewable && Boolean(StateIcon)}
           imgClassName={cn(
             "transition-[transform,opacity,filter] duration-700 ease-out-expo group-hover:scale-[1.035]",

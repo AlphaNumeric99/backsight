@@ -31,6 +31,7 @@ import { useNow } from "@/hooks/use-now";
 import { useSettings } from "@/queries/settings";
 import { useDayIndex } from "@/queries/recordings";
 import { useStartExport } from "@/queries/exports";
+import { useLivePreview } from "@/features/previews/use-live-preview";
 import { LiveBadge, OverlayButton, StageMessage, VideoStage, useFullscreen } from "./video-stage";
 import { StatsPopover } from "./stats-popover";
 import { useSnapshot } from "./snapshot";
@@ -53,6 +54,7 @@ export function LiveTab({ camera }: { camera: Camera }) {
   const [fullscreen, toggleFullscreen] = useFullscreen(stageRef);
   const info = useStatusInfo(camera.status);
   const snapshot = useSnapshot(camera, videoRef);
+  useLivePreview(camera.id, videoRef, playerState.kind === "playing");
   const recording = useLiveRecording(camera);
   const offset = camera.utcOffsetMinutes ?? localOffsetMinutes();
   const now = useNow(1000);

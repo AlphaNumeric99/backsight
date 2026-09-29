@@ -10,7 +10,7 @@ import { upsertJob } from "./exports";
 
 /**
  * Keeps the query cache in sync with backend events: camera status changes, camera list
- * changes and export progress. Mounted once, inside the router.
+ * changes, new previews and export progress. Mounted once, inside the router.
  */
 export function ApiEventBridge() {
   const qc = useQueryClient();
@@ -33,6 +33,13 @@ export function ApiEventBridge() {
           void qc.invalidateQueries({ queryKey: queryKeys.cameras() });
           void qc.invalidateQueries({ queryKey: queryKeys.groups() });
           break;
+        case "camera-preview": {
+          const { snapshotUrl, snapshotAt } = event;
+          const apply = (c: Camera) => (c.id === event.cameraId ? { ...c, snapshotUrl, snapshotAt } : c);
+          qc.setQueryData<Camera[]>(queryKeys.cameras(), (list) => list?.map(apply));
+          qc.setQueryData<Camera>(queryKeys.camera(event.cameraId), (c) => (c ? apply(c) : c));
+          break;
+        }
         case "export-progress": {
           const job = event.job;
           const list = qc.getQueryData<ExportJob[]>(queryKeys.exports());

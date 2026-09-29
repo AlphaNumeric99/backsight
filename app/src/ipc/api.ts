@@ -62,8 +62,10 @@ export interface Camera {
   utcOffsetMinutes?: number;
   /** IANA zone reported by the camera, if any. */
   timeZone?: string;
-  /** URL of the most recent cached frame, if any. */
+  /** URL of the camera's preview: the most recent frame the player captured, if any. */
   snapshotUrl?: string;
+  /** When the preview was captured. */
+  snapshotAt?: IsoDateTime;
 }
 
 export interface CameraGroup {
@@ -210,6 +212,7 @@ export interface Settings {
 export type AppEvent =
   | { type: "camera-status"; cameraId: CameraId; status: CameraStatus }
   | { type: "cameras-changed" }
+  | { type: "camera-preview"; cameraId: CameraId; snapshotUrl: string; snapshotAt: IsoDateTime }
   | { type: "export-progress"; job: ExportJob };
 
 export type ApiErrorCode =
@@ -260,6 +263,8 @@ export interface BacksightApi {
 
   /** Saves a PNG snapshot; resolves to the saved file path. */
   saveSnapshot(cameraId: CameraId, png: Blob): Promise<string>;
+  /** Stores a JPEG of the camera's current picture as its preview (followed by `camera-preview`). */
+  savePreview(cameraId: CameraId, jpeg: Blob): Promise<void>;
 
   getSettings(): Promise<Settings>;
   updateSettings(patch: Partial<Settings>): Promise<Settings>;

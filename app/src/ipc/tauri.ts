@@ -48,6 +48,10 @@ export function createTauriApi(): BacksightApi {
       invoke<string>("save_snapshot", new Uint8Array(await png.arrayBuffer()), {
         headers: { "x-camera-id": cameraId },
       }),
+    savePreview: async (cameraId: CameraId, jpeg: Blob) =>
+      invoke<void>("save_preview", new Uint8Array(await jpeg.arrayBuffer()), {
+        headers: { "x-camera-id": cameraId },
+      }),
 
     getSettings: () => invoke("get_settings"),
     updateSettings: (patch) => invoke("update_settings", { patch }),

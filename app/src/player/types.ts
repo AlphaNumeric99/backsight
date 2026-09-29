@@ -45,7 +45,16 @@ export interface PlayerStats {
   clock?: "audio" | "wall";
 }
 
+export interface SnapshotOptions {
+  /** Defaults to PNG at the frame's natural size. */
+  type?: "image/png" | "image/jpeg";
+  /** JPEG quality, 0–1. */
+  quality?: number;
+  /** Scales the frame down to at most this width. */
+  maxWidth?: number;
+}
+
 export interface VideoSurfaceHandle {
-  /** Captures the current frame as a PNG. */
-  snapshot(): Promise<Blob>;
+  /** Captures the current frame; a PNG at natural size unless `options` say otherwise. */
+  snapshot(options?: SnapshotOptions): Promise<Blob>;
 }

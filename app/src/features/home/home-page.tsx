@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNow } from "@/hooks/use-now";
 import { useCameras, useGroups } from "@/queries/cameras";
 import { useUiStore } from "@/state/ui";
+import { usePreviewRefresh } from "@/features/previews/use-preview-refresh";
 import { CameraCard, CameraCardSkeleton } from "./camera-card";
 import { EmptyCamerasArt } from "./empty-art";
 
@@ -30,6 +31,7 @@ export function HomePage() {
 
   const list = cameras.data ?? [];
   const groupList = groups.data ?? [];
+  const capturing = usePreviewRefresh(list);
   const validGroup = group === "all" || group === "favorites" || groupList.some((g) => g.id === group) ? group : "all";
 
   const filtered = useMemo(() => {
@@ -146,7 +148,12 @@ export function HomePage() {
                   <div className="grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(248px,1fr))]">
                     <AnimatePresence mode="popLayout" initial={false}>
                       {filtered.map((camera) => (
-                        <CameraCard key={camera.id} camera={camera} groups={groupList} />
+                        <CameraCard
+                          key={camera.id}
+                          camera={camera}
+                          groups={groupList}
+                          capturing={capturing === camera.id}
+                        />
                       ))}
                     </AnimatePresence>
                   </div>

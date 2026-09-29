@@ -7,7 +7,7 @@ import type { ApiError, BacksightApi, StreamHandle, StreamRequest } from "../ipc
 import { AudioOutput } from "./audioOutput";
 import type { Fit } from "./fit";
 import type { WorkerCommand, WorkerEvent } from "./protocol";
-import type { PlayerState, PlayerStats } from "./types";
+import type { PlayerState, PlayerStats, SnapshotOptions } from "./types";
 
 export interface PlayerEvents {
   onState(state: PlayerState): void;
@@ -138,7 +138,7 @@ export class PlayerController {
     this.audio.setMuted(muted);
   }
 
-  snapshot(): Promise<Blob> {
+  snapshot(options?: SnapshotOptions): Promise<Blob> {
     return new Promise((resolve, reject) => {
       const id = ++this.snapshotId;
       const timer = setTimeout(() => {
@@ -146,7 +146,7 @@ export class PlayerController {
         reject(new Error("The snapshot timed out"));
       }, SNAPSHOT_TIMEOUT_MS);
       this.snapshots.set(id, { resolve, reject, timer });
-      this.post({ type: "snapshot", id });
+      this.post({ type: "snapshot", id, options });
     });
   }
 

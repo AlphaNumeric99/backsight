@@ -12,7 +12,7 @@ import { JitterBuffer } from "./jitter";
 import { s16ToFloat32 } from "./pcm";
 import type { StreamMode, WorkerCommand, WorkerEvent, WorkletCommand, WorkletReport } from "./protocol";
 import { WindowCounter } from "./stats";
-import type { PlayerState, PlayerStats } from "./types";
+import type { PlayerState, PlayerStats, SnapshotOptions } from "./types";
 import { decodeBatch, type AudioConfigInfo, type Packet, type StreamStatus, type VideoConfigPacket } from "./wire";
 
 interface WorkerScope {
@@ -95,15 +95,19 @@ class Renderer {
     this.draw();
   }
 
-  /** The current frame at its natural size, as PNG. */
-  async snapshot(): Promise<Blob> {
+  /** The current frame: PNG at its natural size unless `options` say otherwise. */
+  async snapshot(options: SnapshotOptions = {}): Promise<Blob> {
     const frame = this.current;
     if (!frame) throw new Error("no frame to capture yet");
-    const canvas = new OffscreenCanvas(frame.displayWidth, frame.displayHeight);
+    const scale = options.maxWidth ? Math.min(1, options.maxWidth / frame.displayWidth) : 1;
+    const width = Math.max(1, Math.round(frame.displayWidth * scale));
+    const height = Math.max(1, Math.round(frame.displayHeight * scale));
+    const canvas = new OffscreenCanvas(width, height);
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("the 2D canvas context is unavailable");
-    ctx.drawImage(frame, 0, 0);
-    return canvas.convertToBlob({ type: "image/png" });
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(frame, 0, 0, width, height);
+    return canvas.convertToBlob({ type: options.type ?? "image/png", quality: options.quality });
   }
 
   private draw(): void {
@@ -245,7 +249,7 @@ class MediaEngine {
         this.audioSync.latencyUs = message.latencyMs * 1000;
         break;
       case "snapshot":
-        void this.snapshot(message.id);
+        void this.snapshot(message.id, message.options);
         break;
     }
   }
@@ -813,10 +817,10 @@ class MediaEngine {
 
   // --- Misc -----------------------------------------------------------------------------------
 
-  private async snapshot(id: number): Promise<void> {
+  private async snapshot(id: number, options?: SnapshotOptions): Promise<void> {
     try {
       if (!this.renderer) throw new Error("the player is not ready");
-      this.post({ type: "snapshot", id, blob: await this.renderer.snapshot() });
+      this.post({ type: "snapshot", id, blob: await this.renderer.snapshot(options) });
     } catch (error) {
       this.post({ type: "snapshot", id, error: describeError(error) });
     }

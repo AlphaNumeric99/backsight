@@ -84,7 +84,8 @@ export const VideoSurface = forwardRef<VideoSurfaceHandle, VideoSurfaceProps>(fu
   useImperativeHandle(
     ref,
     () => ({
-      snapshot: () => controllerRef.current?.snapshot() ?? Promise.reject(new Error("The player is not mounted")),
+      snapshot: (options) =>
+        controllerRef.current?.snapshot(options) ?? Promise.reject(new Error("The player is not mounted")),
     }),
     [],
   );

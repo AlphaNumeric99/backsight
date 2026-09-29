@@ -14,6 +14,7 @@ use crate::model::{
     AddCameraRequest, AppEvent, Camera, CameraState, CameraStatus, DiscoveredDevice, StorageInfo,
     UpdateCameraRequest,
 };
+use crate::previews::{self, Previews};
 use crate::secrets;
 
 /// Name of the Tauri event carrying [`AppEvent`]s to the UI.
@@ -112,7 +113,8 @@ impl CameraHandle {
             .await
     }
 
-    pub fn to_api(&self) -> Camera {
+    /// `preview_at`: when the camera's preview was saved (ms since the epoch), if it has one.
+    fn to_api(&self, preview_at: Option<i64>) -> Camera {
         let record = self.record();
         let info = self.info.read().expect("info lock").clone();
         Camera {
@@ -130,7 +132,8 @@ impl CameraHandle {
             video_codec: None,
             utc_offset_minutes: info.clock.map(|c| c.utc_offset_minutes),
             time_zone: None,
-            snapshot_url: None,
+            snapshot_url: preview_at.map(|ms| previews::url(&self.id, ms)),
+            snapshot_at: preview_at.map(rfc3339_ms),
         }
     }
 }
@@ -138,6 +141,7 @@ impl CameraHandle {
 pub struct CameraManager {
     app: AppHandle,
     db: Arc<Db>,
+    previews: Previews,
     cameras: RwLock<HashMap<String, Arc<CameraHandle>>>,
 }
 
@@ -155,6 +159,12 @@ fn now_rfc3339() -> String {
     jiff::Timestamp::now().to_string()
 }
 
+fn rfc3339_ms(ms: i64) -> String {
+    jiff::Timestamp::from_millisecond(ms)
+        .map(|t| t.to_string())
+        .unwrap_or_default()
+}
+
 fn random_id() -> String {
     let mut bytes = [0u8; 6];
     getrandom::fill(&mut bytes).expect("OS random number generator");
@@ -163,10 +173,11 @@ fn random_id() -> String {
 
 impl CameraManager {
     /// Loads saved cameras and starts polling their status.
-    pub fn start(app: AppHandle, db: Arc<Db>) -> ApiResult<Arc<Self>> {
+    pub fn start(app: AppHandle, db: Arc<Db>, previews: Previews) -> ApiResult<Arc<Self>> {
         let manager = Arc::new(Self {
             app,
             db,
+            previews,
             cameras: RwLock::new(HashMap::new()),
         });
         for record in manager.db.cameras()? {
@@ -220,7 +231,32 @@ impl CameraManager {
     }
 
     pub fn list(&self) -> Vec<Camera> {
-        self.handles().iter().map(|h| h.to_api()).collect()
+        self.handles().iter().map(|h| self.api(h)).collect()
+    }
+
+    pub fn camera(&self, id: &str) -> ApiResult<Camera> {
+        let handle = self.get(id)?;
+        Ok(self.api(&handle))
+    }
+
+    fn api(&self, handle: &CameraHandle) -> Camera {
+        handle.to_api(self.previews.saved_at(&handle.id))
+    }
+
+    /// Stores the camera's latest picture (a JPEG from the player) as its preview.
+    pub fn save_preview(&self, id: &str, jpeg: &[u8]) -> ApiResult<()> {
+        self.get(id)?;
+        let saved_at = self.previews.save(id, jpeg)?;
+        self.emit(AppEvent::CameraPreview {
+            camera_id: id.to_owned(),
+            snapshot_url: previews::url(id, saved_at),
+            snapshot_at: rfc3339_ms(saved_at),
+        });
+        Ok(())
+    }
+
+    pub fn preview(&self, id: &str) -> Option<Vec<u8>> {
+        self.previews.read(id)
     }
 
     pub fn emit(&self, event: AppEvent) {
@@ -403,7 +439,7 @@ impl CameraManager {
         self.insert(handle.clone());
         self.refresh(&handle).await;
         self.emit(AppEvent::CamerasChanged);
-        Ok(handle.to_api())
+        Ok(self.api(&handle))
     }
 
     pub async fn update(&self, id: &str, request: UpdateCameraRequest) -> ApiResult<Camera> {
@@ -443,13 +479,14 @@ impl CameraManager {
         *handle.record.write().expect("record lock") = record;
         self.refresh(&handle).await;
         self.emit(AppEvent::CamerasChanged);
-        Ok(handle.to_api())
+        Ok(self.api(&handle))
     }
 
     pub fn remove(&self, id: &str) -> ApiResult<()> {
         self.get(id)?;
         self.db.delete_camera(id)?;
         secrets::delete_all(id);
+        self.previews.remove(id);
         self.cameras.write().expect("cameras lock").remove(id);
         self.emit(AppEvent::CamerasChanged);
         Ok(())

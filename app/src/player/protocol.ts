@@ -8,7 +8,7 @@
 
 import type { Fit } from "./fit";
 import type { PcmPlayerStatus } from "./pcm";
-import type { PlayerState, PlayerStats } from "./types";
+import type { PlayerState, PlayerStats, SnapshotOptions } from "./types";
 
 export type StreamMode = "live" | "playback";
 
@@ -26,7 +26,7 @@ export type WorkerCommand =
   /** A port to a new audio worklet, replacing any previous one. */
   | { type: "audioPort"; port: MessagePort; latencyMs: number }
   | { type: "audioLatency"; latencyMs: number }
-  | { type: "snapshot"; id: number };
+  | { type: "snapshot"; id: number; options?: SnapshotOptions };
 
 export type WorkerEvent =
   | { type: "state"; session: number; state: PlayerState }

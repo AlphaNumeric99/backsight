@@ -194,6 +194,7 @@ export function createMockData(options: MockDataOptions = {}): Omit<BacksightApi
       utcOffsetMinutes: offset,
       timeZone,
       snapshotUrl: f.hasSnapshot ? snapshotDataUrl(f.scene, night) : undefined,
+      snapshotAt: f.hasSnapshot ? toIso(t0) : undefined,
     };
   };
 
@@ -524,6 +525,22 @@ export function createMockData(options: MockDataOptions = {}): Omit<BacksightApi
       const pad = (n: number) => String(n).padStart(2, "0");
       const stamp = `${p.year}-${pad(p.month)}-${pad(p.day)} ${pad(p.hour)}.${pad(p.minute)}.${pad(p.second)}`;
       return joinPath(platform, settings.exportDir, "Snapshots", `${cam.name} ${stamp}.png`);
+    },
+
+    async savePreview(cameraId, jpeg) {
+      await wait();
+      const cam = findCamera(cameraId);
+      if (!(jpeg instanceof Blob) || jpeg.size === 0) throw apiError("invalid_input", "The preview is empty.");
+      // Cameras with a drawn scene keep it (the fixture streams are test patterns); the others
+      // show the captured frame.
+      if (!cam.snapshotUrl?.startsWith("data:") && typeof URL.createObjectURL === "function") {
+        if (cam.snapshotUrl?.startsWith("blob:")) URL.revokeObjectURL(cam.snapshotUrl);
+        cam.snapshotUrl = URL.createObjectURL(jpeg);
+      }
+      cam.snapshotAt = toIso(now());
+      if (cam.snapshotUrl) {
+        emit({ type: "camera-preview", cameraId, snapshotUrl: cam.snapshotUrl, snapshotAt: cam.snapshotAt });
+      }
     },
 
     async getSettings() {

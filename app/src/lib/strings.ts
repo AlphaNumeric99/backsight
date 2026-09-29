@@ -107,6 +107,7 @@ export const strings = {
     unfavorite: "Remove from favorites",
     open: (name: string) => `Open ${name}`,
     noPreview: "No preview yet",
+    gettingPreview: "Getting a preview…",
     emptyTitle: "No cameras yet",
     emptyBody: "Add a Tapo camera on your network to watch it live and browse its SD card from your desktop.",
     emptyChecklistTitle: "You'll need",

@@ -76,6 +76,7 @@ Rules the player relies on:
 | `cameras.rs` | Saved cameras, their clients, 60 s status polling, `backsight://event` events |
 | `recordings.rs` | Days with footage and the day index (segments + detection events), cached in SQLite |
 | `thumbnails.rs` | Detection thumbnails via the `thumb://<camera>/<start>` scheme, disk-cached |
+| `previews.rs` | Camera previews for cards and posters: the player's latest frame as a small JPEG, served at `thumb://…/preview/<camera>/<saved_at>` |
 | `streams.rs` | Live and playback streams to the player (1× via `playback`, other speeds via `download` paced here). Streams end when the page closes them or its webview reloads |
 | `exports.rs` | Clip export jobs: `download` → MP4, one job at a time per camera, `export-progress` events |
 | `audio_aac.rs` | 48 kHz upsampling + AAC encoding (Media Foundation) for exports |

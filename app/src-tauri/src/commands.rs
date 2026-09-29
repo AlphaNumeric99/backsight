@@ -56,7 +56,7 @@ pub async fn list_cameras(state: State<'_, AppState>) -> ApiResult<Vec<Camera>> 
 
 #[tauri::command]
 pub async fn get_camera(state: State<'_, AppState>, id: String) -> ApiResult<Camera> {
-    Ok(state.cameras.get(&id)?.to_api())
+    state.cameras.camera(&id)
 }
 
 #[tauri::command]
@@ -226,6 +226,24 @@ pub async fn save_snapshot(
     ));
     std::fs::write(&path, png).map_err(ApiError::internal)?;
     Ok(path.to_string_lossy().into_owned())
+}
+
+/// Stores a JPEG of the camera's current picture as its preview for the Home cards (raw
+/// request body; camera id in the `x-camera-id` header).
+#[tauri::command]
+pub async fn save_preview(
+    state: State<'_, AppState>,
+    request: tauri::ipc::Request<'_>,
+) -> ApiResult<()> {
+    let tauri::ipc::InvokeBody::Raw(jpeg) = request.body() else {
+        return Err(ApiError::invalid("expected the JPEG as the request body"));
+    };
+    let camera_id = request
+        .headers()
+        .get("x-camera-id")
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| ApiError::invalid("missing x-camera-id header"))?;
+    state.cameras.save_preview(camera_id, jpeg)
 }
 
 /// Shows an exported file in the OS file manager.

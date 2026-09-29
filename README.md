@@ -22,6 +22,8 @@ goes through a cloud service.
 - **Clip & download** to MP4 (H.264/H.265) at up to ~7× real time, with AAC audio on Windows
   (other platforms export video only for now).
 - **Multi-view** grid (1, 2, 4, 1+5, 9 or 16 cameras).
+- **Camera cards** with a recent picture of each camera, grabbed in the background and
+  refreshed while you watch.
 - Passwords stay in your OS keychain; the cameras' TLS certificates are pinned on first use.
 
 Not yet: pan/tilt control, two-way audio, hubs and battery cameras, and cameras whose firmware
