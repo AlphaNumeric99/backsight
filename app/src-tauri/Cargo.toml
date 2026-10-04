@@ -13,6 +13,10 @@ publish = false
 # see https://github.com/rust-lang/cargo/issues/8519
 name = "backsight_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+# Application code, not a published API — and on Windows `tauri-build` adds its
+# static-CRT shim directory to the link search path, which breaks the workspace's
+# merged doctest binary. See the `--exclude backsight` note in CONTRIBUTING.md.
+doctest = false
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

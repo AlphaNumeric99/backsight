@@ -33,7 +33,12 @@ jobs:
         shell: bash
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
+      - run: cargo test --workspace --all-targets
+      # Doctests run separately, without the Tauri app crate: `tauri-build` puts
+      # its static-CRT shim directory (containing an empty `msvcrt.lib`) on the
+      # link search path, and in the merged doctest binary that shadows the real
+      # MSVC import library without the matching /NODEFAULTLIB flags.
+      - run: cargo test --workspace --exclude backsight --doc
 
   frontend:
     name: Frontend
