@@ -2,11 +2,9 @@
 //!
 //! The cloud hands out signed `rtsps://` URLs (RTSP over TLS, port 443) that relay the
 //! camera through Wowza. Only what live view needs is implemented: `DESCRIBE` (parse
-//! the SDP for the video track), `SETUP` with interleaved RTP-over-TCP (no extra UDP
-//! ports through NATs and firewalls), and `PLAY`. Audio tracks are ignored for now.
-//!
-//! The camera's audio is AAC in RTP, which the player pipeline doesn't decode yet
-//! (Tapo audio is G.711); Qubo live view is video-only until that changes.
+//! the SDP for media tracks), `SETUP` with interleaved RTP-over-TCP (no extra UDP
+//! ports through NATs and firewalls), and `PLAY`. Video and AAC audio share that
+//! connection; RTCP sender reports provide a common clock for audio/video sync.
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -17,6 +15,7 @@ use tokio::net::TcpStream;
 use tokio_rustls::TlsConnector;
 use tokio_rustls::TlsStream;
 
+use super::audio::AudioTrack;
 use crate::error::{ApiError, ApiResult};
 
 const MAX_REPLY_BYTES: usize = 1024 * 1024;
@@ -24,13 +23,24 @@ const MAX_REPLY_BYTES: usize = 1024 * 1024;
 /// One received RTP packet.
 #[derive(Debug, Clone)]
 pub struct RtpPacket {
-    /// The RTP timestamp, in the stream's clock (90 kHz for H.264).
+    /// The RTP timestamp: 90 kHz for video, the negotiated rate for AAC audio.
     pub timestamp: u32,
     /// The marker bit: the last packet of an access unit.
     pub marker: bool,
     /// The sequence number, for ordering diagnostics.
     pub sequence: u16,
     pub payload: Bytes,
+}
+
+pub enum MediaPacket {
+    Video(RtpPacket),
+    Audio(RtpPacket),
+}
+
+#[derive(Debug, Clone, Copy)]
+struct SenderReport {
+    timestamp: u32,
+    unix_us: i64,
 }
 
 /// The parts of the session's SDP the stream needs.
@@ -41,6 +51,7 @@ pub struct Sdp {
     /// `a=fmtp:… sprop-parameter-sets=` as raw NAL units, if the SDP carries them.
     pub sprop_parameter_sets: Vec<Vec<u8>>,
     pub codec: Option<String>,
+    pub audio: Option<AudioTrack>,
 }
 
 /// A live RTSP session over TLS.
@@ -55,6 +66,10 @@ pub struct RtspSession<S = TlsStream<TcpStream>> {
     pub codec: String,
     aggregate_url: String,
     video_channel: u8,
+    pub audio: Option<AudioTrack>,
+    audio_channel: Option<u8>,
+    video_clock: Option<SenderReport>,
+    audio_clock: Option<SenderReport>,
     keepalive_at: tokio::time::Instant,
 }
 
@@ -191,6 +206,10 @@ impl RtspSession {
             codec: String::new(),
             aggregate_url: url.to_owned(),
             video_channel: 0,
+            audio: None,
+            audio_channel: None,
+            video_clock: None,
+            audio_clock: None,
             keepalive_at: tokio::time::Instant::now() + Duration::from_secs(20),
         };
 
@@ -219,6 +238,7 @@ impl RtspSession {
         let control = base.resolve_control(control);
         session.parameter_sets = sdp.sprop_parameter_sets;
         session.codec = sdp.codec.unwrap_or_default();
+        session.audio = sdp.audio;
 
         let setup = session
             .request(
@@ -245,6 +265,40 @@ impl RtspSession {
             return Err(ApiError::internal(
                 "The Qubo relay did not establish a session.",
             ));
+        }
+
+        if let Some(audio) = session.audio.clone() {
+            let control = base.resolve_control(&audio.control);
+            let session_id = session.session.clone().unwrap();
+            let setup = session
+                .request(
+                    "SETUP",
+                    &control,
+                    &[
+                        ("Transport", "RTP/AVP/TCP;unicast;interleaved=2-3"),
+                        ("Session", &session_id),
+                    ],
+                )
+                .await?;
+            if setup.0 != 200 {
+                return Err(session_error("audio SETUP", setup.0));
+            }
+            let channel = setup
+                .1
+                .get("transport")
+                .and_then(|transport| {
+                    transport
+                        .split(';')
+                        .find_map(|part| part.trim().strip_prefix("interleaved="))
+                })
+                .and_then(|channels| channels.split('-').next()?.parse().ok())
+                .unwrap_or(2);
+            if channel == session.video_channel || channel == session.video_channel + 1 {
+                return Err(ApiError::internal(
+                    "The relay assigned overlapping audio/video channels.",
+                ));
+            }
+            session.audio_channel = Some(channel);
         }
 
         let session_header = session.session.clone();
@@ -357,11 +411,9 @@ impl<S: AsyncRead + AsyncWrite + Unpin> RtspSession<S> {
         Ok(n)
     }
 
-    /// The next RTP packet of the video track, or `None` when the stream ended.
-    ///
-    /// RTCP and audio packets are skipped; server-initiated RTSP responses are
-    /// consumed.
-    pub async fn next_packet(&mut self) -> ApiResult<Option<RtpPacket>> {
+    /// The next video or audio packet. RTCP updates the clock mapping; server
+    /// replies and other RTCP packets are consumed without reaching the decoder.
+    pub async fn next_media_packet(&mut self) -> ApiResult<Option<MediaPacket>> {
         loop {
             if tokio::time::Instant::now() >= self.keepalive_at {
                 self.cseq += 1;
@@ -394,10 +446,23 @@ impl<S: AsyncRead + AsyncWrite + Unpin> RtspSession<S> {
                 }
                 self.buffer.advance(4);
                 let data = self.buffer.split_to(len);
-                if channel != self.video_channel {
-                    continue;
+                let data = data.freeze();
+                if channel == self.video_channel {
+                    return parse_rtp(data).map(|packet| Some(MediaPacket::Video(packet)));
                 }
-                return parse_rtp(data.freeze()).map(Some);
+                if Some(channel) == self.audio_channel {
+                    return parse_rtp(data).map(|packet| Some(MediaPacket::Audio(packet)));
+                }
+                if channel == self.video_channel + 1 {
+                    if let Some(report) = parse_sender_report(&data) {
+                        self.video_clock = Some(report);
+                    }
+                } else if Some(channel) == self.audio_channel.map(|channel| channel + 1)
+                    && let Some(report) = parse_sender_report(&data)
+                {
+                    self.audio_clock = Some(report);
+                }
+                continue;
             }
             if self.buffer.first() == Some(&b'R') {
                 // "RTSP/1.0 …": a response sent outside a request.
@@ -412,6 +477,32 @@ impl<S: AsyncRead + AsyncWrite + Unpin> RtspSession<S> {
             }
             if self.read_more().await? == 0 {
                 return Ok(None);
+            }
+        }
+    }
+
+    /// Source wall-clock time according to the most recent RTCP sender report.
+    /// The streaming layer anchors it once, avoiding jumps as reports refresh.
+    pub fn source_time_us(&self, audio: bool, timestamp: u32) -> Option<i64> {
+        let (report, rate) = if audio {
+            (self.audio_clock?, self.audio.as_ref()?.sample_rate)
+        } else {
+            (self.video_clock?, 90_000)
+        };
+        let delta = i64::from(timestamp.wrapping_sub(report.timestamp) as i32);
+        if rate == 0 {
+            return None;
+        }
+        Some(report.unix_us + delta * 1_000_000 / i64::from(rate))
+    }
+
+    #[cfg(test)]
+    async fn next_packet(&mut self) -> ApiResult<Option<RtpPacket>> {
+        loop {
+            match self.next_media_packet().await? {
+                Some(MediaPacket::Video(packet)) => return Ok(Some(packet)),
+                Some(MediaPacket::Audio(_)) => {}
+                None => return Ok(None),
             }
         }
     }
@@ -508,15 +599,44 @@ fn parse_rtp(data: Bytes) -> ApiResult<RtpPacket> {
     })
 }
 
+/// RTCP can contain several packets; the first sender report carries its NTP and
+/// RTP timestamps (RFC 3550 §6.4.1). Other packets are irrelevant to the clock.
+fn parse_sender_report(mut data: &[u8]) -> Option<SenderReport> {
+    while data.len() >= 4 {
+        let len = (usize::from(u16::from_be_bytes([data[2], data[3]])) + 1) * 4;
+        if len > data.len() || data[0] >> 6 != 2 {
+            return None;
+        }
+        if data[1] == 200 && len >= 28 {
+            let seconds = u32::from_be_bytes(data[8..12].try_into().ok()?);
+            let fraction = u32::from_be_bytes(data[12..16].try_into().ok()?);
+            return Some(SenderReport {
+                timestamp: u32::from_be_bytes(data[16..20].try_into().ok()?),
+                unix_us: (i64::from(seconds) - 2_208_988_800) * 1_000_000
+                    + ((u64::from(fraction) * 1_000_000) >> 32) as i64,
+            });
+        }
+        data = &data[len..];
+    }
+    None
+}
+
 /// Reads the video track's control URL and parameter sets out of a session's SDP.
 ///
-/// Only the first `m=video` section is used; `m=audio` sections are skipped.
+/// The first video section and first MPEG4-GENERIC audio section are used.
 pub fn parse_sdp(text: &str) -> Sdp {
     use base64::Engine as _;
 
     let mut sdp = Sdp::default();
     let mut in_video = false;
     let mut video_seen = false;
+    let mut in_audio = false;
+    let mut audio_seen = false;
+    let mut audio_control = None;
+    let mut audio_codec = String::new();
+    let mut sample_rate = 0;
+    let mut channels = 1;
+    let mut audio_params = HashMap::new();
     for line in text.lines() {
         let (key, value) = match line.split_once('=') {
             Some(kv) => kv,
@@ -524,9 +644,30 @@ pub fn parse_sdp(text: &str) -> Sdp {
         };
         match key {
             "m" => {
+                in_audio = value.trim().starts_with("audio") && !audio_seen;
+                audio_seen |= in_audio;
                 in_video = value.trim().starts_with("video") && !video_seen;
                 if in_video {
                     video_seen = true;
+                }
+            }
+            "a" if in_audio => {
+                if let Some(control) = value.strip_prefix("control:") {
+                    audio_control = Some(control.trim().to_owned());
+                } else if let Some(rtpmap) = value.strip_prefix("rtpmap:") {
+                    if let Some(format) = rtpmap.split_whitespace().nth(1) {
+                        let mut fields = format.split('/');
+                        audio_codec = fields.next().unwrap_or_default().to_ascii_uppercase();
+                        sample_rate = fields.next().and_then(|n| n.parse().ok()).unwrap_or(0);
+                        channels = fields.next().and_then(|n| n.parse().ok()).unwrap_or(1);
+                    }
+                } else if let Some(fmtp) = value.strip_prefix("fmtp:")
+                    && let Some((_, params)) = fmtp.split_once(' ')
+                {
+                    for (key, value) in params.split(';').filter_map(|p| p.split_once('=')) {
+                        audio_params
+                            .insert(key.trim().to_ascii_lowercase(), value.trim().to_owned());
+                    }
                 }
             }
             "a" if in_video => {
@@ -566,6 +707,29 @@ pub fn parse_sdp(text: &str) -> Sdp {
             _ => {}
         }
     }
+    if audio_codec == "MPEG4-GENERIC"
+        && let Some(control) = audio_control
+    {
+        let config = audio_params
+            .get("config")
+            .and_then(|hex| hex::decode(hex).ok())
+            .unwrap_or_default();
+        let number = |key: &str, default| {
+            audio_params
+                .get(key)
+                .and_then(|value| value.parse().ok())
+                .unwrap_or(default)
+        };
+        sdp.audio = Some(AudioTrack {
+            control,
+            sample_rate,
+            channels,
+            config,
+            size_length: number("sizelength", 13),
+            index_length: number("indexlength", 3),
+            index_delta_length: number("indexdeltalength", 3),
+        });
+    }
     sdp
 }
 
@@ -601,7 +765,8 @@ a=control:trackID=2\r
     #[test]
     fn sdp_without_video_is_empty() {
         let sdp = parse_sdp("v=0\r\nm=audio 0 RTP/AVP 97\r\na=control:trackID=2\r\n");
-        assert_eq!(sdp, Sdp::default());
+        assert!(sdp.video_control.is_none());
+        assert!(sdp.sprop_parameter_sets.is_empty());
     }
 
     #[test]
@@ -685,6 +850,10 @@ a=control:trackID=2\r
             codec: "H264".into(),
             aggregate_url: "rtsps://test/live".into(),
             video_channel: 0,
+            audio: None,
+            audio_channel: None,
+            video_clock: None,
+            audio_clock: None,
             keepalive_at: tokio::time::Instant::now() + Duration::from_secs(20),
         }
     }
@@ -717,5 +886,55 @@ a=control:trackID=2\r
             .unwrap();
         let mut session = session(client);
         assert_eq!(session.next_packet().await.unwrap().unwrap().timestamp, 5);
+    }
+
+    #[tokio::test]
+    async fn negotiated_audio_channel_is_routed_as_audio() {
+        let (client, mut server) = tokio::io::duplex(64);
+        server
+            .write_all(&[
+                b'$', 2, 0, 17, 0x80, 0xe1, 0, 1, 0, 0, 0, 5, 0, 0, 0, 1, 0, 16, 0, 8, 0xaa,
+            ])
+            .await
+            .unwrap();
+        let mut session = session(client);
+        session.audio_channel = Some(2);
+        let MediaPacket::Audio(packet) = session.next_media_packet().await.unwrap().unwrap() else {
+            panic!("audio was routed as video");
+        };
+        assert_eq!(packet.timestamp, 5);
+        assert_eq!(packet.payload.as_ref(), &[0, 16, 0, 8, 0xaa]);
+    }
+
+    #[test]
+    fn parses_qubo_aac_track_configuration() {
+        let sdp = parse_sdp(
+            "m=audio 0 RTP/AVP 96\r\na=rtpmap:96 mpeg4-generic/16000/1\r\na=fmtp:96 mode=AAC-hbr;config=1408;SizeLength=13;IndexLength=3;IndexDeltaLength=3\r\na=control:trackID=2\r\n",
+        );
+        let audio = sdp.audio.unwrap();
+        assert_eq!(audio.sample_rate, 16_000);
+        assert_eq!(audio.channels, 1);
+        assert_eq!(audio.config, vec![0x14, 0x08]);
+        assert_eq!(
+            (
+                audio.size_length,
+                audio.index_length,
+                audio.index_delta_length
+            ),
+            (13, 3, 3)
+        );
+    }
+
+    #[test]
+    fn sender_report_maps_rtp_to_unix_time() {
+        let mut data = vec![0x80, 200, 0, 6];
+        data.extend_from_slice(&1_u32.to_be_bytes());
+        data.extend_from_slice(&2_208_988_801_u32.to_be_bytes());
+        data.extend_from_slice(&0x8000_0000_u32.to_be_bytes());
+        data.extend_from_slice(&16_000_u32.to_be_bytes());
+        data.extend_from_slice(&[0; 8]);
+        let report = parse_sender_report(&data).unwrap();
+        assert_eq!(report.timestamp, 16_000);
+        assert_eq!(report.unix_us, 1_500_000);
     }
 }

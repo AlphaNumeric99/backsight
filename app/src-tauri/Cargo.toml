@@ -33,6 +33,7 @@ rusqlite = { version = "0.40", features = ["bundled"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 serde.workspace = true
 serde_json.workspace = true
+symphonia = { version = "0.5.5", default-features = false, features = ["aac"] }
 tapo-camera.workspace = true
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"

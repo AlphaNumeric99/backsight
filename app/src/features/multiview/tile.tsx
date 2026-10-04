@@ -43,13 +43,12 @@ export interface TileProps {
   handleProps?: { onKeyDown?: KeyboardEventHandler } & Record<string, unknown>;
 }
 
-function TileButton({ label, onClick, children, disabled }: { label: string; onClick: () => void; children: ReactNode; disabled?: boolean }) {
+function TileButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
   return (
     <Tooltip content={label}>
       <button
         type="button"
         aria-label={label}
-        disabled={disabled}
         onClick={(e) => {
           e.stopPropagation();
           onClick();
@@ -173,7 +172,7 @@ export const Tile = memo(function Tile({
         </button>
         <div className="flex items-center gap-1.5">
           {info.viewable && (
-            <TileButton label={camera.brand === "qubo" ? strings.qubo.audioUnavailable : muted ? strings.multiview.unmute(camera.name) : strings.multiview.mute(camera.name)} disabled={camera.brand === "qubo"} onClick={onToggleMute}>
+            <TileButton label={muted ? strings.multiview.unmute(camera.name) : strings.multiview.mute(camera.name)} onClick={onToggleMute}>
               {muted ? <VolumeX /> : <Volume2 className="text-[#8fb0ff]" />}
             </TileButton>
           )}

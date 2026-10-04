@@ -28,8 +28,8 @@ footage — so the video is an ffmpeg test pattern.</sub>
   (other platforms export video only for now).
 - **Multi-view** grid (1, 2, 4, 1+5, 9 or 16 cameras).
 - **Qubo live view** through its signed RTSPS cloud relay, with automatic token renewal.
-  Verified with the Smart Cam 360 3MP at 2304×1296 (H.265). Qubo audio, SD-card playback,
-  events and SD-card exports are not supported yet.
+  Verified with the Smart Cam 360 3MP at 2304×1296 (H.265), with AAC audio decoded to PCM.
+  Qubo SD-card playback, events and SD-card exports are not supported yet.
 - **Camera cards** with a recent picture of each camera, grabbed in the background and
   refreshed while you watch.
 - Passwords and Qubo session tokens stay in your OS keychain. Tapo camera certificates
@@ -114,6 +114,8 @@ Handy for development:
   `cargo test -p backsight live_relay_produces_decodable_video -- --ignored --nocapture`.
   Set `QUBO_VIDEO_OUTPUT` to save the elementary video locally for an independent decoder
   check. Never commit either file.
+  `QUBO_AUDIO_OUTPUT` optionally saves decoded signed 16-bit PCM locally; the hardware
+  check also verifies reception and decoding of the camera's AAC audio.
 
 ## Credits
 

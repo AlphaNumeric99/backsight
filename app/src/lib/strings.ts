@@ -202,7 +202,6 @@ export const strings = {
     success: "The camera is saved. Open live view to watch it through Qubo’s cloud.",
     liveOnly: "Live view only",
     playbackUnavailable: "Qubo SD-card playback is not supported yet.",
-    audioUnavailable: "Qubo audio is not supported yet.",
     passwordUpdate: "This updates the shared Qubo account password for all your Qubo cameras.",
     viewerTime: "Viewer time",
   },

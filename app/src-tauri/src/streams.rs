@@ -52,6 +52,47 @@ fn ticks_to_us(ticks: i64) -> i64 {
     ticks * 1_000_000 / 90_000
 }
 
+/// One RTP clock, anchored once. Sender reports align both tracks in the source's
+/// NTP clock; absent an initial report, arrival time is the live-view fallback.
+struct LiveRtpTimeline {
+    rate: u32,
+    last: Option<u32>,
+    ticks: i64,
+    anchor: Option<(i64, i64)>,
+}
+
+impl LiveRtpTimeline {
+    fn new(rate: u32) -> Self {
+        Self {
+            rate,
+            last: None,
+            ticks: 0,
+            anchor: None,
+        }
+    }
+
+    fn map(
+        &mut self,
+        timestamp: u32,
+        source_us: Option<i64>,
+        shared_offset: &mut Option<i64>,
+    ) -> i64 {
+        self.ticks = match self.last {
+            Some(last) => self.ticks + i64::from(timestamp.wrapping_sub(last) as i32),
+            None => i64::from(timestamp),
+        };
+        self.last = Some(timestamp);
+        let (ticks, wall) = *self.anchor.get_or_insert_with(|| {
+            let wall = match source_us {
+                Some(source) => source + *shared_offset.get_or_insert_with(|| now_us() - source),
+                None => now_us(),
+            };
+            (self.ticks, wall)
+        });
+        wall + (self.ticks - ticks) * 1_000_000 / i64::from(self.rate)
+    }
+}
+
 /// Maps the demuxer's 90 kHz timestamps to wall-clock microseconds.
 struct TimeMapper {
     /// (pts, wall µs) of the reference frame.
@@ -410,7 +451,7 @@ impl Streams {
         }
     }
 
-    /// Feeds the relay's H.264 access units into the same channel as Tapo video.
+    /// Feeds relay video and decoded AAC audio into the same wire format as Tapo.
     async fn run_qubo(
         &self,
         handle: &CameraHandle,
@@ -444,20 +485,33 @@ impl Streams {
                 tapo_camera::media::VideoCodec::H264
             })
             .with_parameter_sets(&session.parameter_sets);
-        let mut mapper = TimeMapper::new(
-            true,
-            None,
-            ClockInfo {
-                correction: 0,
-                utc_offset_minutes: 0,
-            },
-        );
+        let mut video_time = LiveRtpTimeline::new(90_000);
+        let mut source_offset = None;
+        let mut audio = session
+            .audio
+            .clone()
+            .map(|track| {
+                Ok::<_, ApiError>((
+                    qubo::audio::Depacketizer::new(&track)?,
+                    qubo::audio::AacDecoder::new(&track)?,
+                    LiveRtpTimeline::new(track.sample_rate),
+                    tapo_camera::media::AudioConfig {
+                        codec: tapo_camera::media::AudioCodec::Aac,
+                        sample_rate: track.sample_rate,
+                        channels: track.channels,
+                    },
+                ))
+            })
+            .transpose()?;
+        let mut audio_units = Vec::new();
+        let mut pcm = Vec::new();
+        let mut audio_config_sent = false;
         let mut events = Vec::new();
         let mut playing = false;
         let mut last_frame = Instant::now();
         let result = async {
             loop {
-                let packet = tokio::time::timeout(STALL_TIMEOUT, session.next_packet())
+                let packet = tokio::time::timeout(STALL_TIMEOUT, session.next_media_packet())
                     .await
                     .map_err(|_| {
                         ApiError::new("offline", "The Qubo relay stopped sending video.")
@@ -465,8 +519,41 @@ impl Streams {
                 let Some(packet) = packet else {
                     return Ok(());
                 };
-                depacketizer.push(&packet, &mut events);
                 let mut batch = Vec::new();
+                match packet {
+                    qubo::rtsp::MediaPacket::Video(packet) => {
+                        depacketizer.push(&packet, &mut events)
+                    }
+                    qubo::rtsp::MediaPacket::Audio(packet) => {
+                        if let Some((depacketizer, decoder, time, config)) = audio.as_mut() {
+                            if let Err(err) = depacketizer.push(&packet, &mut audio_units) {
+                                tracing::debug!(camera = %handle.id, %err, "discarding malformed Qubo audio packet");
+                                depacketizer.reset();
+                                audio_units.clear();
+                            }
+                            for unit in audio_units.drain(..) {
+                                if let Err(err) = decoder.decode(&unit, &mut pcm) {
+                                    tracing::debug!(camera = %handle.id, %err, "discarding malformed Qubo AAC frame");
+                                    decoder.reset();
+                                    continue;
+                                }
+                                if pcm.is_empty() {
+                                    continue;
+                                }
+                                let timestamp = time.map(
+                                    unit.timestamp,
+                                    session.source_time_us(true, unit.timestamp),
+                                    &mut source_offset,
+                                );
+                                if !audio_config_sent {
+                                    wire::push_audio_config(&mut batch, timestamp, false, config);
+                                    audio_config_sent = true;
+                                }
+                                wire::push_audio_pcm(&mut batch, timestamp, false, &pcm);
+                            }
+                        }
+                    }
+                }
                 for event in events.drain(..) {
                     match event {
                         MediaEvent::VideoConfig(config) => {
@@ -476,7 +563,11 @@ impl Streams {
                             last_frame = Instant::now();
                             wire::push_video_frame(
                                 &mut batch,
-                                mapper.map(frame.pts),
+                                video_time.map(
+                                    frame.pts as u32,
+                                    session.source_time_us(false, frame.pts as u32),
+                                    &mut source_offset,
+                                ),
                                 false,
                                 &frame,
                             );
@@ -553,5 +644,16 @@ mod tests {
             waited >= Duration::from_millis(150) && waited < Duration::from_millis(600),
             "{waited:?}"
         );
+    }
+
+    #[test]
+    fn live_audio_and_video_share_sender_report_time() {
+        let mut video = LiveRtpTimeline::new(90_000);
+        let mut audio = LiveRtpTimeline::new(16_000);
+        let mut offset = Some(10_000_000);
+        assert_eq!(video.map(90_000, Some(1_000_000), &mut offset), 11_000_000);
+        assert_eq!(audio.map(8000, Some(1_100_000), &mut offset), 11_100_000);
+        assert_eq!(audio.map(9024, None, &mut offset), 11_164_000);
+        assert_eq!(video.map(99_000, None, &mut offset), 11_100_000);
     }
 }

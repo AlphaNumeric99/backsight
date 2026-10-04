@@ -13,6 +13,7 @@
 //! token that lives 180 days. Both are kept in the OS keychain (never in the
 //! database or logs); the account password is stored once, when the camera is added.
 
+pub mod audio;
 pub mod cloud;
 pub mod rtsp;
 pub mod video;
@@ -263,6 +264,12 @@ mod tests {
             .with_parameter_sets(&session.parameter_sets);
         let mut events = Vec::new();
         let mut frames = 0;
+        let track = session.audio.clone().expect("Qubo AAC track");
+        let mut audio_packets = audio::Depacketizer::new(&track).unwrap();
+        let mut audio_decoder = audio::AacDecoder::new(&track).unwrap();
+        let mut audio_units = Vec::new();
+        let mut pcm = Vec::new();
+        let mut audio_samples = Vec::new();
         let wanted = std::env::var("QUBO_FRAME_COUNT")
             .ok()
             .and_then(|n| n.parse::<usize>().ok())
@@ -271,9 +278,22 @@ mod tests {
         let mut elementary = Vec::new();
         let mut dimensions = None;
         let received = tokio::time::timeout(Duration::from_secs(90), async {
-            while frames < wanted {
-                let packet = session.next_packet().await.unwrap().expect("relay ended");
-                depacketizer.push(&packet, &mut events);
+            while frames < wanted || audio_samples.len() < track.sample_rate as usize {
+                let packet = session
+                    .next_media_packet()
+                    .await
+                    .unwrap()
+                    .expect("relay ended");
+                match packet {
+                    rtsp::MediaPacket::Video(packet) => depacketizer.push(&packet, &mut events),
+                    rtsp::MediaPacket::Audio(packet) => {
+                        audio_packets.push(&packet, &mut audio_units).unwrap();
+                        for unit in audio_units.drain(..) {
+                            audio_decoder.decode(&unit, &mut pcm).unwrap();
+                            audio_samples.extend_from_slice(&pcm);
+                        }
+                    }
+                }
                 for event in events.drain(..) {
                     match event {
                         MediaEvent::VideoConfig(config) => {
@@ -338,6 +358,24 @@ mod tests {
         if let Ok(output) = std::env::var("QUBO_VIDEO_OUTPUT") {
             std::fs::write(output, elementary).unwrap();
         }
-        println!("Received {frames} frames; dimensions {dimensions:?}.");
+        let peak = audio_samples
+            .iter()
+            .map(|sample| sample.unsigned_abs())
+            .max()
+            .unwrap_or(0);
+        if let Ok(output) = std::env::var("QUBO_AUDIO_OUTPUT") {
+            let data: Vec<u8> = audio_samples
+                .iter()
+                .flat_map(|sample| sample.to_le_bytes())
+                .collect();
+            std::fs::write(output, data).unwrap();
+        }
+        assert!(peak > 0, "camera audio was all silence");
+        println!(
+            "Received {frames} frames; dimensions {dimensions:?}; {} PCM samples at {} Hz / {} channels, peak {peak}.",
+            audio_samples.len(),
+            track.sample_rate,
+            track.channels
+        );
     }
 }

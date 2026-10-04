@@ -125,8 +125,13 @@ helpers to build avcC/hvcC. RTP clocks are extended across wraparound and anchor
 UTC for live display. Closing the connection releases the relay; normal stream completion
 also sends TEARDOWN. Stream tickets are requested per open and never returned to JavaScript.
 
-The first implementation sends video only: the relay's AAC audio is not decoded into the
-existing PCM wire packets. Qubo playback, SD exports and event lists are hidden or disabled
+AAC-hbr (MPEG4-GENERIC) audio is depacketized by `qubo/audio.rs`, then decoded to interleaved
+signed 16-bit PCM with Symphonia's AAC-LC decoder. Negotiated sample rate/channel count feed
+the existing AudioWorklet pipeline. RTCP sender reports align the audio and video RTP clocks;
+when an initial report is absent, the backend anchors that track to arrival time. Both clocks
+remain steady after their initial anchor. Live and Multi-view share the existing sound controls.
+
+Qubo playback, SD exports and event lists are hidden or disabled
 in the UI and rejected in the backend. Snapshot, live recording and preview capture use the
 existing decoded-frame paths. No FFmpeg executable or extra media server is required.
 

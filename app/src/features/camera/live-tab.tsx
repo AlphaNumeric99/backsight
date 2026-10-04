@@ -150,7 +150,7 @@ export function LiveTab({ camera }: { camera: Camera }) {
             topRight={info.viewable && <StatsPopover stats={stats} />}
             bottomLeft={
               <>
-                <OverlayButton label={camera.brand === "qubo" ? strings.qubo.audioUnavailable : muted ? strings.live.unmute : strings.live.mute} disabled={camera.brand === "qubo"} onClick={() => setMuted((m) => !m)}>
+                <OverlayButton label={muted ? strings.live.unmute : strings.live.mute} onClick={() => setMuted((m) => !m)}>
                   {muted ? <VolumeX /> : <Volume2 />}
                 </OverlayButton>
                 <Segmented
@@ -205,7 +205,7 @@ export function LiveTab({ camera }: { camera: Camera }) {
           <ActionButton
             label={strings.live.sound}
             onClick={() => setMuted((m) => !m)}
-            disabled={!info.viewable || camera.brand === "qubo"}
+            disabled={!info.viewable}
             active={!muted}
             icon={muted ? <VolumeX /> : <Volume2 />}
           />

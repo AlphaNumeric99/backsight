@@ -143,7 +143,7 @@ export function QuboStep({ onBack, onAdded, onBusy }: {
                 ))}
               </div>
             )}
-            <p className="text-xs text-fg-3">{strings.qubo.liveOnly} · {strings.qubo.audioUnavailable}</p>
+            <p className="text-xs text-fg-3">{strings.qubo.liveOnly}</p>
           </>
         )}
       </DialogBody>
