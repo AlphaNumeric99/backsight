@@ -27,3 +27,9 @@ design-ref/
 
 # Scratch output from manual testing
 /scratch/
+
+# Local credentials and session caches (secrets - never commit)
+.env
+.env.*
+!.env.example
+.qubo/
