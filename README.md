@@ -10,6 +10,11 @@ goes through a cloud service.
 > **Status:** early, but working end to end on Windows with Tapo C325WB cameras (firmware
 > 1.2.6 and 1.4.4). Other models on the same firmware generation should work; reports welcome.
 
+![The Cameras page, showing a card per camera with a recent picture, status and SD-card usage](docs/images/cameras.png)
+
+<sub>All screenshots here come from the built-in demo cameras (`npm run dev`), not real
+footage — so the video is an ffmpeg test pattern.</sub>
+
 ## Features
 
 - **Live view** from the camera's own media stream: HD or SD, starts in about 0.1 s, with
@@ -28,6 +33,15 @@ goes through a cloud service.
 
 Not yet: pan/tilt control, two-way audio, hubs and battery cameras, and cameras whose firmware
 only offers TP-Link's newer "TPAP" login.
+
+**Playback** puts the day on a zoomable timeline — the recorded band, colour-coded detection
+events, and the event list beside it:
+
+![The Playback tab: a timeline under the video and a filterable list of detected events](docs/images/playback.png)
+
+**Live view** has the stream controls and what the camera reports about itself:
+
+![The Live tab: the stream with snapshot, record, sound and fullscreen controls, connection and SD-card stats, and today's events](docs/images/live.png)
 
 ## Requirements
 
@@ -75,7 +89,14 @@ Handy for development:
   a password and stores it in the OS keychain; `call <ip> info|day <YYYYMMDD>|…` runs read-only
   API calls; `stream <ip> live hd 10 out.mpegts` saves video. Run them with
   `cargo run -p tapo-camera --example <name> -- …`.
-- Tests: `cargo test --workspace` and `npm test` in `app/`.
+- Tests: `npm test` in `app/`, and for Rust:
+
+  ```bash
+  cargo test --workspace --all-targets
+  cargo test --workspace --exclude backsight --doc
+  ```
+
+  Doctests run separately — see [CONTRIBUTING.md](CONTRIBUTING.md#why-the-two-test-commands).
 
 ## Credits
 

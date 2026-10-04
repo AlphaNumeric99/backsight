@@ -1,0 +1,77 @@
+name: Bug report
+description: Something in Backsight doesn't work the way it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please remove IP addresses, MAC addresses, credentials and
+        camera footage from anything you paste or attach.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, and what you got instead.
+      placeholder: I opened Playback for yesterday and the timeline stayed empty, but the Tapo app shows recordings.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the camera
+        2. Switch to Playback
+        3. Pick yesterday in the calendar
+    validations:
+      required: true
+
+  - type: input
+    id: camera
+    attributes:
+      label: Camera model and firmware
+      description: Both are in the app under the camera's name, or in the Tapo app under device settings.
+      placeholder: C325WB, firmware 1.4.4 Build 260228
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Backsight version
+      description: From Settings → About, or the installer you used.
+      placeholder: 0.1.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Optional but very helpful. Run with `BACKSIGHT_LOG=debug` and paste the relevant part.
+        Read it through first and remove anything you'd rather not publish.
+      render: text
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: "**Third-Party Compatibility** is on in the Tapo app (Me → Third-Party Services)"
+        - label: The camera works in the Tapo app right now
+        - label: I removed IP addresses, MAC addresses and credentials from everything above
+          required: true

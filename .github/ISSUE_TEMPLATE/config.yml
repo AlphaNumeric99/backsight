@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Question or idea
+    url: https://github.com/AlphaNumeric99/backsight/discussions
+    about: For anything that isn't a bug report — questions, ideas and feature requests.
+  - name: Support for TP-Link's Tapo app or hardware
+    url: https://www.tp-link.com/support/
+    about: Backsight is an independent project, not affiliated with TP-Link. For problems with the cameras themselves or the Tapo app, contact TP-Link.

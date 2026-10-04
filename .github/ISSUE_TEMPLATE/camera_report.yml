@@ -1,0 +1,59 @@
+name: Camera compatibility report
+description: Tell us whether a camera model works, so others know what to expect
+labels: ["compatibility"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Reports are useful whether the camera worked or not. Backsight has only been tested on
+        a couple of models, so this is how the supported list grows.
+
+        Please remove IP addresses, MAC addresses and credentials from anything you paste.
+
+  - type: input
+    id: model
+    attributes:
+      label: Camera model
+      placeholder: C225
+    validations:
+      required: true
+
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware version
+      placeholder: 1.4.4 Build 260228
+    validations:
+      required: true
+
+  - type: dropdown
+    id: result
+    attributes:
+      label: How far did you get?
+      options:
+        - Everything I tried worked
+        - It was added and plays live, but something else failed
+        - It was found, but adding it failed
+        - It wasn't found on the network at all
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: works
+    attributes:
+      label: What works
+      options:
+        - label: Found by the network scan
+        - label: Added with the TP-Link account password
+        - label: Live view
+        - label: SD-card playback
+        - label: Detection events and their thumbnails
+        - label: Clip export to MP4
+        - label: Multi-view
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything that went wrong
+      description: Error messages, and logs from `BACKSIGHT_LOG=debug` if you have them.
+      render: text
