@@ -11,8 +11,8 @@ use crate::cameras::CameraManager;
 use crate::db::Db;
 use crate::error::{ApiError, ApiResult};
 use crate::model::{
-    AddCameraRequest, Camera, CameraGroup, DayIndex, DiscoveredDevice, ExportJob, Settings,
-    StreamQuality, UpdateCameraRequest,
+    AddCameraRequest, AddQuboCameraRequest, Camera, CameraAccount, CameraGroup, DayIndex,
+    DiscoveredDevice, ExportJob, QuboCloudDevice, Settings, StreamQuality, UpdateCameraRequest,
 };
 use crate::recordings;
 
@@ -73,6 +73,23 @@ pub async fn add_camera(state: State<'_, AppState>, req: AddCameraRequest) -> Ap
     state.cameras.add(req).await
 }
 
+/// Signs in to the Qubo account (storing it) and lists its cameras for the add dialog.
+#[tauri::command]
+pub async fn list_qubo_devices(
+    state: State<'_, AppState>,
+    account: CameraAccount,
+) -> ApiResult<Vec<QuboCloudDevice>> {
+    state.cameras.qubo_devices(&account).await
+}
+
+#[tauri::command]
+pub async fn add_qubo_camera(
+    state: State<'_, AppState>,
+    req: AddQuboCameraRequest,
+) -> ApiResult<Camera> {
+    state.cameras.add_qubo(req).await
+}
+
 #[tauri::command]
 pub async fn update_camera(
     state: State<'_, AppState>,
@@ -84,7 +101,7 @@ pub async fn update_camera(
 
 #[tauri::command]
 pub async fn remove_camera(state: State<'_, AppState>, id: String) -> ApiResult<()> {
-    state.cameras.remove(&id)
+    state.cameras.remove(&id).await
 }
 
 #[tauri::command]

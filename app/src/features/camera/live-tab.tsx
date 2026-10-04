@@ -150,7 +150,7 @@ export function LiveTab({ camera }: { camera: Camera }) {
             topRight={info.viewable && <StatsPopover stats={stats} />}
             bottomLeft={
               <>
-                <OverlayButton label={muted ? strings.live.unmute : strings.live.mute} onClick={() => setMuted((m) => !m)}>
+                <OverlayButton label={camera.brand === "qubo" ? strings.qubo.audioUnavailable : muted ? strings.live.unmute : strings.live.mute} disabled={camera.brand === "qubo"} onClick={() => setMuted((m) => !m)}>
                   {muted ? <VolumeX /> : <Volume2 />}
                 </OverlayButton>
                 <Segmented
@@ -205,7 +205,7 @@ export function LiveTab({ camera }: { camera: Camera }) {
           <ActionButton
             label={strings.live.sound}
             onClick={() => setMuted((m) => !m)}
-            disabled={!info.viewable}
+            disabled={!info.viewable || camera.brand === "qubo"}
             active={!muted}
             icon={muted ? <VolumeX /> : <Volume2 />}
           />
@@ -220,7 +220,7 @@ export function LiveTab({ camera }: { camera: Camera }) {
         <StatusTiles camera={camera} quality={quality} stats={stats} now={now} />
       </div>
 
-      <TodayPanel camera={camera} />
+      {camera.brand !== "qubo" && <TodayPanel camera={camera} />}
     </div>
   );
 }
@@ -289,7 +289,7 @@ function StatusTiles({
       icon: <Wifi />,
       label: strings.live.tiles.connection,
       value: info.viewable ? info.label : strings.status[camera.status.state === "auth_failed" ? "authFailed" : "offline"],
-      sub: camera.host,
+      sub: camera.brand === "qubo" ? strings.qubo.cloud : camera.host,
       tone: info.tone,
     },
     {
@@ -301,7 +301,7 @@ function StatusTiles({
     {
       icon: <SdCardIcon />,
       label: strings.live.tiles.storage,
-      value: !hasCard
+      value: camera.brand === "qubo" ? strings.storage.unknown : !hasCard
         ? storage.text
         : camera.storage?.loopRecording && storage.fraction >= 0.9
           ? strings.live.tiles.loop
@@ -316,7 +316,7 @@ function StatusTiles({
     },
     {
       icon: <Clock />,
-      label: strings.live.tiles.localTime,
+      label: camera.brand === "qubo" ? strings.qubo.viewerTime : strings.live.tiles.localTime,
       value: formatHm(now, offset),
       sub: formatUtcOffset(offset),
       title: camera.timeZone?.replace(/_/g, " "),

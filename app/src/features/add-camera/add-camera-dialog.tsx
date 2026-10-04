@@ -28,8 +28,9 @@ import { Disclosure } from "@/components/ui/disclosure";
 import { useNow } from "@/hooks/use-now";
 import { useAddCamera, useGroups } from "@/queries/cameras";
 import { useUiStore } from "@/state/ui";
+import { QuboStep } from "./qubo-step";
 
-type Step = "find" | "credentials" | "done";
+type Step = "find" | "credentials" | "qubo" | "done";
 
 interface Target {
   host: string;
@@ -62,6 +63,7 @@ export function AddCameraDialog() {
   const [target, setTarget] = useState<Target | null>(null);
   const [added, setAdded] = useState<Camera | null>(null);
   const [scanId, setScanId] = useState(0);
+  const [quboBusy, setQuboBusy] = useState(false);
   const add = useAddCamera();
 
   useEffect(() => {
@@ -75,19 +77,19 @@ export function AddCameraDialog() {
     // Reset only when the dialog opens.
   }, [open]);
 
-  const busy = add.isPending;
+  const busy = add.isPending || quboBusy;
   const title =
     step === "find"
       ? strings.addCamera.title
       : step === "credentials"
         ? strings.addCamera.credentialsTitle
-        : strings.addCamera.successTitle(added?.name ?? "");
+        : step === "qubo" ? strings.qubo.title : strings.addCamera.successTitle(added?.name ?? "");
   const description =
     step === "find"
       ? strings.addCamera.findDescription
       : step === "credentials"
         ? strings.addCamera.credentialsDescription
-        : undefined;
+        : step === "qubo" ? strings.qubo.description : undefined;
 
   return (
     <Dialog
@@ -112,6 +114,7 @@ export function AddCameraDialog() {
               scanId={scanId}
               enabled={open}
               onRescan={() => setScanId((n) => n + 1)}
+              onQubo={() => setStep("qubo")}
               onPick={(t) => {
                 setTarget(t);
                 add.reset();
@@ -145,6 +148,9 @@ export function AddCameraDialog() {
               }}
             />
           )}
+          {step === "qubo" && (
+            <QuboStep onBusy={setQuboBusy} onBack={() => setStep("find")} onAdded={(camera) => { setAdded(camera); setStep("done"); }} />
+          )}
         </motion.div>
       </AnimatePresence>
     </Dialog>
@@ -158,11 +164,13 @@ function FindStep({
   enabled,
   onRescan,
   onPick,
+  onQubo,
 }: {
   scanId: number;
   enabled: boolean;
   onRescan: () => void;
   onPick: (target: Target) => void;
+  onQubo: () => void;
 }) {
   const scan = useQuery({
     queryKey: ["discover", scanId],
@@ -265,6 +273,10 @@ function FindStep({
             </div>
           )}
         </Field>
+        <Button variant="ghost" className="mt-3 w-full" onClick={onQubo}>
+          {strings.qubo.add}
+          <ChevronRight />
+        </Button>
       </form>
     </>
   );
@@ -563,7 +575,7 @@ function DoneStep({ camera, onClose, onOpenLive }: { camera: Camera; onClose: ()
     <div className="flex flex-col items-center px-8 pb-7 pt-10 text-center">
       <SuccessMark />
       <h2 className="mt-5 text-lg font-semibold tracking-[-0.01em] text-fg">{strings.addCamera.successTitle(camera.name)}</h2>
-      <p className="mt-1.5 max-w-sm text-sm text-fg-2">{strings.addCamera.successBody}</p>
+      <p className="mt-1.5 max-w-sm text-sm text-fg-2">{camera.brand === "qubo" ? strings.qubo.success : strings.addCamera.successBody}</p>
       <div className="mt-7 flex gap-2">
         <Button variant="ghost" onClick={onClose}>
           {strings.common.done}

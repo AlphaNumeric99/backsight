@@ -5,6 +5,16 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 pub type CameraId = String;
 
+/// Which protocol a camera speaks, and therefore how it is reached: Tapo cameras
+/// are on the LAN, Qubo cameras live behind the vendor's cloud.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum Brand {
+    #[default]
+    Tapo,
+    Qubo,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CameraState {
@@ -59,6 +69,8 @@ pub struct StorageInfo {
 pub struct Camera {
     pub id: CameraId,
     pub name: String,
+    pub brand: Brand,
+    /// The camera's address on the LAN, or the cloud device id for Qubo cameras.
     pub host: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
@@ -123,6 +135,28 @@ pub struct AddCameraRequest {
     pub name: Option<String>,
     pub cloud_password: String,
     pub camera_account: Option<CameraAccount>,
+    pub group_ids: Option<Vec<String>>,
+}
+
+/// A camera of the signed-in Qubo account, as offered when adding one.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuboCloudDevice {
+    pub device_uuid: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// The cloud's device type, e.g. `"ptzCamera3MP"`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    pub already_added: bool,
+}
+
+/// Adds a camera of the already-signed-in Qubo account.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AddQuboCameraRequest {
+    pub device_uuid: String,
+    pub name: Option<String>,
     pub group_ids: Option<Vec<String>>,
 }
 
@@ -332,6 +366,45 @@ mod tests {
                 "snapshotAt": "2026-09-29T06:00:00Z"
             })
         );
+    }
+
+    #[test]
+    fn cameras_carry_their_brand() {
+        // The brand decides what the UI hides (playback, exports) and which
+        // secondary line the cards show.
+        let camera = Camera {
+            id: "c1".into(),
+            name: "Gate".into(),
+            brand: Brand::Qubo,
+            host: "48ae90fc".into(),
+            model: None,
+            firmware: None,
+            mac: None,
+            group_ids: vec![],
+            favorite: false,
+            has_camera_account: false,
+            status: CameraStatus::new(CameraState::Online),
+            storage: None,
+            video_codec: None,
+            utc_offset_minutes: None,
+            time_zone: None,
+            snapshot_url: None,
+            snapshot_at: None,
+        };
+        assert_eq!(
+            serde_json::to_value(&camera).unwrap().get("brand").unwrap(),
+            &json!("qubo")
+        );
+        assert_eq!(serde_json::to_value(Brand::Tapo).unwrap(), json!("tapo"));
+    }
+
+    #[test]
+    fn add_qubo_request_parses() {
+        let request: AddQuboCameraRequest =
+            serde_json::from_value(json!({ "deviceUuid": "d", "name": "Living room" })).unwrap();
+        assert_eq!(request.device_uuid, "d");
+        assert_eq!(request.name.as_deref(), Some("Living room"));
+        assert_eq!(request.group_ids, None);
     }
 
     #[test]

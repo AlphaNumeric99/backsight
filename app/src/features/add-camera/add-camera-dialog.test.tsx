@@ -78,4 +78,30 @@ describe("Add camera dialog", () => {
     expect(isValidHost("192.168.1")).toBe(false);
     expect(isValidHost("")).toBe(false);
   });
+
+  it("signs in to Qubo, picks a camera and opens the saved-camera step", async () => {
+    act(() => useUiStore.setState({ addCameraOpen: true }));
+    renderWithProviders(<AddCameraDialog />);
+    fireEvent.click(await screen.findByRole("button", { name: "Add from a Qubo account" }));
+    fireEvent.change(await screen.findByLabelText("Qubo account email"), { target: { value: "owner@example.com" } });
+    fireEvent.change(screen.getByLabelText("Qubo account password"), { target: { value: "test-password!#'" } });
+    fireEvent.click(screen.getByRole("button", { name: "Find my cameras" }));
+    const camera = await screen.findByRole("button", { name: /Cam 360 3MP/ });
+    expect(screen.queryByLabelText("Qubo account password")).not.toBeInTheDocument();
+    fireEvent.click(camera);
+    fireEvent.click(screen.getByRole("button", { name: "Add camera" }));
+    expect(await screen.findByText("Cam 360 3MP is ready")).toBeInTheDocument();
+    expect(screen.getByText(/watch it through Qubo’s cloud/)).toBeInTheDocument();
+  });
+
+  it("shows Qubo sign-in errors without Tapo password advice", async () => {
+    act(() => useUiStore.setState({ addCameraOpen: true }));
+    renderWithProviders(<AddCameraDialog />);
+    fireEvent.click(await screen.findByRole("button", { name: "Add from a Qubo account" }));
+    fireEvent.change(await screen.findByLabelText("Qubo account email"), { target: { value: "owner@example.com" } });
+    fireEvent.change(screen.getByLabelText("Qubo account password"), { target: { value: "wrong" } });
+    fireEvent.click(screen.getByRole("button", { name: "Find my cameras" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("The Qubo cloud rejected the account.");
+    expect(screen.queryByText(/10 failed attempts/)).not.toBeInTheDocument();
+  });
 });

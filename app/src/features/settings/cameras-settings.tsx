@@ -147,7 +147,7 @@ function CameraRow({
           </div>
         )}
         <p className="mt-0.5 truncate text-xs text-fg-3">
-          {[camera.model, camera.host, camera.firmware].filter(Boolean).join(" · ")}
+          {[camera.model, camera.brand === "qubo" ? strings.qubo.cloud : camera.host, camera.firmware].filter(Boolean).join(" · ")}
         </p>
         {groups.length > 0 && (
           <div className="mt-2.5 flex flex-wrap items-center gap-1.5" role="group" aria-label={strings.settings.cameraGroups}>
@@ -251,13 +251,13 @@ function PasswordDialog({ camera, onClose }: { camera: Camera | null; onClose: (
       open={open}
       onOpenChange={(o) => !o && !update.isPending && close()}
       title={camera ? strings.settings.updatePasswordTitle(camera.name) : ""}
-      description={strings.settings.updatePasswordBody}
+      description={camera?.brand === "qubo" ? strings.qubo.passwordUpdate : strings.settings.updatePasswordBody}
       size="sm"
       dismissible={!update.isPending}
     >
       <DialogForm onSubmit={submit}>
         <DialogBody className="grid gap-3">
-          <Field label={strings.addCamera.passwordLabel} error={copy ? `${copy.title}. ${copy.body}` : null}>
+          <Field label={camera?.brand === "qubo" ? strings.qubo.password : strings.addCamera.passwordLabel} error={copy ? `${copy.title}. ${camera?.brand === "qubo" ? error?.message : copy.body}` : null}>
             {({ id, describedBy, invalid }) => (
               <PasswordInput
                 id={id}

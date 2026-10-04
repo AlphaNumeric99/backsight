@@ -95,6 +95,7 @@ impl Thumbnails {
             return None;
         }
         let handle = self.cameras.get(camera_id).ok()?;
+        handle.tapo_client().ok()?;
         let (reply, answer) = oneshot::channel();
         self.worker(&handle).send(Job { start, reply }).await.ok()?;
         answer.await.ok().flatten()

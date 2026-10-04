@@ -7,13 +7,15 @@ use std::sync::Mutex;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::model::{CameraGroup, ExportJob};
+use crate::model::{Brand, CameraGroup, ExportJob};
 
 /// A saved camera. Passwords live in the OS keychain, not here.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CameraRecord {
     pub id: String,
     pub name: String,
+    pub brand: Brand,
+    /// The camera's address on the LAN, or the cloud device id for Qubo cameras.
     pub host: String,
     pub model: Option<String>,
     pub firmware: Option<String>,
@@ -21,7 +23,7 @@ pub struct CameraRecord {
     pub group_ids: Vec<String>,
     pub favorite: bool,
     pub has_camera_account: bool,
-    /// Certificate fingerprint pinned on first connection.
+    /// Certificate fingerprint pinned on first connection (Tapo cameras).
     pub cert_pin: Option<String>,
     pub created_at: String,
 }
@@ -63,6 +65,8 @@ const MIGRATIONS: &[&str] = &[
         json TEXT NOT NULL,
         created_at TEXT NOT NULL
     );",
+    // 2: Qubo cloud cameras
+    "ALTER TABLE cameras ADD COLUMN brand TEXT NOT NULL DEFAULT 'tapo';",
 ];
 
 pub struct Db {
@@ -100,7 +104,7 @@ impl Db {
         self.with(|c| {
             let mut stmt = c.prepare(
                 "SELECT id, name, host, model, firmware, mac, group_ids, favorite,
-                        has_camera_account, cert_pin, created_at
+                        has_camera_account, cert_pin, created_at, brand
                  FROM cameras ORDER BY position, created_at",
             )?;
             stmt.query_map([], |row| {
@@ -117,6 +121,10 @@ impl Db {
                     has_camera_account: row.get(8)?,
                     cert_pin: row.get(9)?,
                     created_at: row.get(10)?,
+                    brand: match row.get::<_, String>(11)?.as_str() {
+                        "qubo" => Brand::Qubo,
+                        _ => Brand::Tapo,
+                    },
                 })
             })?
             .collect()
@@ -127,15 +135,15 @@ impl Db {
         self.with(|c| {
             c.execute(
                 "INSERT INTO cameras (id, name, host, model, firmware, mac, group_ids, favorite,
-                                      has_camera_account, cert_pin, created_at, position)
+                                      has_camera_account, cert_pin, created_at, position, brand)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11,
-                         (SELECT COALESCE(MAX(position), 0) + 1 FROM cameras))
+                         (SELECT COALESCE(MAX(position), 0) + 1 FROM cameras), ?12)
                  ON CONFLICT(id) DO UPDATE SET
-                    name = excluded.name, host = excluded.host, model = excluded.model,
-                    firmware = excluded.firmware, mac = excluded.mac,
-                    group_ids = excluded.group_ids, favorite = excluded.favorite,
-                    has_camera_account = excluded.has_camera_account,
-                    cert_pin = excluded.cert_pin",
+                     name = excluded.name, host = excluded.host, model = excluded.model,
+                     firmware = excluded.firmware, mac = excluded.mac,
+                     group_ids = excluded.group_ids, favorite = excluded.favorite,
+                     has_camera_account = excluded.has_camera_account,
+                     cert_pin = excluded.cert_pin, brand = excluded.brand",
                 params![
                     camera.id,
                     camera.name,
@@ -148,6 +156,10 @@ impl Db {
                     camera.has_camera_account,
                     camera.cert_pin,
                     camera.created_at,
+                    match camera.brand {
+                        Brand::Tapo => "tapo",
+                        Brand::Qubo => "qubo",
+                    },
                 ],
             )?;
             Ok(())
@@ -277,6 +289,7 @@ mod tests {
         CameraRecord {
             id: id.into(),
             name: "Gate".into(),
+            brand: Brand::Tapo,
             host: "192.168.1.20".into(),
             model: Some("C325WB".into()),
             firmware: None,
@@ -303,6 +316,31 @@ mod tests {
         assert_eq!(cameras[0], renamed);
         db.delete_camera("a").unwrap();
         assert_eq!(db.cameras().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn qubo_cameras_round_trip() {
+        let db = Db::open_in_memory().unwrap();
+        let mut qubo = record("q1");
+        qubo.brand = Brand::Qubo;
+        qubo.host = "cloud-camera-1".into();
+        db.upsert_camera(&qubo).unwrap();
+        let loaded = db.cameras().unwrap();
+        assert_eq!(loaded[0].brand, Brand::Qubo);
+        assert_eq!(loaded[0].host, "cloud-camera-1");
+    }
+
+    #[test]
+    fn brand_migration_preserves_existing_tapo_cameras() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(MIGRATIONS[0]).unwrap();
+        conn.pragma_update(None, "user_version", 1).unwrap();
+        conn.execute("INSERT INTO cameras (id, name, host, created_at) VALUES ('old', 'Gate', '192.168.1.20', '2026-09-29')", []).unwrap();
+        let db = Db::init(conn).unwrap();
+        let cameras = db.cameras().unwrap();
+        assert_eq!(cameras[0].id, "old");
+        assert_eq!(cameras[0].brand, Brand::Tapo);
+        assert_eq!(cameras[0].host, "192.168.1.20");
     }
 
     #[test]

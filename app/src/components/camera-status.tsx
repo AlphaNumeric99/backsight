@@ -39,7 +39,7 @@ export function describeStatus(status: CameraStatus, now: number = Date.now()): 
         label: status.lastSeen
           ? strings.status.offlineSince(formatRelative(Date.parse(status.lastSeen), now))
           : strings.status.offline,
-        detail: strings.statusDetail.offline,
+        detail: status.message || strings.statusDetail.offline,
         icon: WifiOff,
         viewable: false,
       };
@@ -65,7 +65,7 @@ export function describeStatus(status: CameraStatus, now: number = Date.now()): 
       return {
         tone: "danger",
         label: strings.status.authFailed,
-        detail: strings.statusDetail.authFailed,
+        detail: status.message || strings.statusDetail.authFailed,
         icon: KeyRound,
         viewable: false,
       };
@@ -73,7 +73,7 @@ export function describeStatus(status: CameraStatus, now: number = Date.now()): 
       return {
         tone: "neutral",
         label: strings.status.unsupported,
-        detail: strings.statusDetail.unsupported,
+        detail: status.message || strings.statusDetail.unsupported,
         icon: Ban,
         viewable: false,
       };

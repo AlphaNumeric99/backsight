@@ -30,7 +30,7 @@ export function CameraPage() {
   const search = useSearch({ from: "/cameras/$cameraId" });
   const navigate = useNavigate({ from: "/cameras/$cameraId" });
   const camera = useCamera(cameraId);
-  const tab: Tab = search.tab ?? "live";
+  const tab: Tab = camera.data?.brand === "qubo" ? "live" : search.tab ?? "live";
 
   useEffect(() => {
     if (camera.data) document.title = `${camera.data.name} — ${strings.app.name}`;
@@ -87,7 +87,7 @@ export function CameraPage() {
               <StatusPill status={cam.status} />
             </div>
             <p className="mt-0.5 truncate text-[13px] text-fg-3">
-              {[cam.model, cam.host, cam.videoCodec?.toUpperCase().replace("H", "H.")].filter(Boolean).join(" · ")}
+              {[cam.model, cam.brand === "qubo" ? strings.qubo.cloud : cam.host, cam.videoCodec?.toUpperCase().replace("H", "H.")].filter(Boolean).join(" · ")}
             </p>
           </div>
         ) : (
@@ -101,7 +101,7 @@ export function CameraPage() {
             <Radio className="size-4" />
             {strings.camera.tabs.live}
           </TabsTrigger>
-          <TabsTrigger value="playback">
+          <TabsTrigger value="playback" disabled={cam?.brand === "qubo"} title={cam?.brand === "qubo" ? strings.qubo.playbackUnavailable : undefined}>
             <History className="size-4" />
             {strings.camera.tabs.playback}
           </TabsTrigger>
@@ -116,7 +116,7 @@ export function CameraPage() {
               <LiveTab camera={cam} />
             </motion.div>
           </TabsContent>
-          <TabsContent value="playback" className="flex-1">
+          {cam.brand !== "qubo" && <TabsContent value="playback" className="flex-1">
             <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0, transition: transitions.base }}>
               <PlaybackTab
                 key={cam.id}
@@ -128,7 +128,7 @@ export function CameraPage() {
                 onGoLive={() => setTab("live")}
               />
             </motion.div>
-          </TabsContent>
+          </TabsContent>}
         </>
       ) : (
         <div className="grid gap-5 [grid-template-columns:minmax(0,1fr)_320px]">

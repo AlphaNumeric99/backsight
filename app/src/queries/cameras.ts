@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { api, type AddCameraRequest, type Camera, type CameraGroup, type CameraId, type UpdateCameraRequest } from "@/ipc";
+import { api, type AddCameraRequest, type AddQuboCameraRequest, type Camera, type CameraGroup, type CameraId, type UpdateCameraRequest } from "@/ipc";
 import { describeError, toApiError } from "@/lib/errors";
 import { queryKeys } from "./keys";
 
@@ -78,6 +78,17 @@ export function useRemoveCamera() {
     onSuccess: (_, id) => {
       qc.setQueryData<Camera[]>(queryKeys.cameras(), (list) => list?.filter((c) => c.id !== id));
       qc.removeQueries({ queryKey: queryKeys.camera(id), exact: true });
+    },
+  });
+}
+
+export function useAddQuboCamera() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (req: AddQuboCameraRequest) => api.addQuboCamera(req),
+    onSuccess: (camera) => {
+      qc.setQueryData<Camera[]>(queryKeys.cameras(), (list) => list ? [...list.filter((c) => c.id !== camera.id), camera] : list);
+      qc.setQueryData<Camera>(queryKeys.camera(camera.id), camera);
     },
   });
 }

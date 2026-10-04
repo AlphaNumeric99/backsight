@@ -6,6 +6,7 @@ mod error;
 mod exports;
 mod model;
 mod previews;
+mod qubo;
 mod recordings;
 mod secrets;
 mod streams;
@@ -21,6 +22,7 @@ use tauri::webview::PageLoadEvent;
 use crate::cameras::CameraManager;
 use crate::commands::AppState;
 use crate::db::Db;
+use crate::qubo::Qubo;
 use crate::thumbnails::Thumbnails;
 
 /// The `thumb` scheme: detection thumbnails at `/<camera>/<start>`, from the cache or the
@@ -81,14 +83,16 @@ pub fn run() {
             let db = Arc::new(Db::open(&data_dir.join("backsight.db"))?);
             let cache_dir = app.path().app_cache_dir()?;
             let previews = previews::Previews::new(cache_dir.join("previews"));
-            let cameras = CameraManager::start(app.handle().clone(), db.clone(), previews)
-                .map_err(|e| e.message)?;
+            let qubo = Arc::new(Qubo::new()?);
+            let cameras =
+                CameraManager::start(app.handle().clone(), db.clone(), previews, qubo.clone())
+                    .map_err(|e| e.message)?;
             let default_export_dir = commands::default_export_dir(app.handle());
             let thumbnails = Arc::new(Thumbnails::new(
                 cache_dir.join("thumbnails"),
                 cameras.clone(),
             ));
-            let streams = Arc::new(streams::Streams::new(cameras.clone()));
+            let streams = Arc::new(streams::Streams::new(cameras.clone(), qubo.clone()));
             let exports = Arc::new(exports::Exports::new(db.clone(), cameras.clone()));
             app.manage(AppState {
                 db,
@@ -113,6 +117,8 @@ pub fn run() {
             commands::get_camera,
             commands::discover,
             commands::add_camera,
+            commands::list_qubo_devices,
+            commands::add_qubo_camera,
             commands::update_camera,
             commands::remove_camera,
             commands::list_groups,

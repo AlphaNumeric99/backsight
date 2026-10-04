@@ -104,6 +104,7 @@ impl Exports {
         settings: &Settings,
     ) -> ApiResult<ExportJob> {
         let handle = self.cameras.get(&request.camera_id)?;
+        handle.tapo_client()?;
         let parse = |s: &str| {
             s.parse::<jiff::Timestamp>()
                 .map(|t| t.as_second())

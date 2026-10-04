@@ -78,6 +78,7 @@ Rules the player relies on:
 | `thumbnails.rs` | Detection thumbnails via the `thumb://<camera>/<start>` scheme, disk-cached |
 | `previews.rs` | Camera previews for cards and posters: the player's latest frame as a small JPEG, served at `thumb://…/preview/<camera>/<saved_at>` |
 | `streams.rs` | Live and playback streams to the player (1× via `playback`, other speeds via `download` paced here). Streams end when the page closes them or its webview reloads |
+| `qubo/` | Qubo cloud authentication and device listing; signed RTSPS tickets, interleaved RTP and H.264/H.265 access-unit assembly |
 | `exports.rs` | Clip export jobs: `download` → MP4, one job at a time per camera, `export-progress` events |
 | `audio_aac.rs` | 48 kHz upsampling + AAC encoding (Media Foundation) for exports |
 | `db.rs` / `secrets.rs` | SQLite storage / OS keychain for passwords |
@@ -90,6 +91,44 @@ served; requests back to the camera (playback start, thumbnails) use camera-cloc
 **Credentials.** Passwords live only in the OS keychain (service `Backsight`). The certificate
 fingerprint seen when a camera is added is pinned in the database; a different certificate at
 the same address is refused.
+
+## Qubo live source
+
+Saved cameras carry a `brand` (`tapo` or `qubo`), added by SQLite migration 2 with existing
+records defaulting to Tapo. A Qubo record's `host` stores the cloud device UUID; the UI
+labels that connection **Qubo cloud**. Qubo handles have no Tapo control client. Recording,
+export and thumbnail entry points reject unsupported operations before contacting a device.
+
+The owner signs in through `list_qubo_devices`; `add_qubo_camera` saves the selected cloud
+device. One shared Qubo account is supported. Credentials and token pairs are keychain
+entries `qubo/account` and `qubo/tokens` under service `Backsight`, never SQLite records.
+The source-device ID travels with the cached tokens. Access-token expiry is read from the
+JWT only as a renewal hint (the cloud validates the token); refresh occurs five minutes
+early. Network failures preserve the saved pair. Rejected saved passwords block background
+login retries until the owner signs in explicitly. Removing the last Qubo camera removes
+the shared secrets.
+
+```
+Qubo account → HTTPS cloud API → fresh signed RTSPS ticket
+                                      ↓
+                    TLS + DESCRIBE / SETUP / PLAY
+                                      ↓
+                    interleaved RTP → video access units
+                                      ↓
+              existing MediaEvent → wire v1 → WebCodecs player
+```
+
+`qubo/rtsp.rs` negotiates the video channel, ignores RTCP, bounds response buffers and sends
+session keepalives. `qubo/video.rs` handles H.264 single NAL / STAP-A / FU-A and H.265
+single NAL / AP / FU payloads (without DONL). Parameter sets use the existing media codec
+helpers to build avcC/hvcC. RTP clocks are extended across wraparound and anchored to host
+UTC for live display. Closing the connection releases the relay; normal stream completion
+also sends TEARDOWN. Stream tickets are requested per open and never returned to JavaScript.
+
+The first implementation sends video only: the relay's AAC audio is not decoded into the
+existing PCM wire packets. Qubo playback, SD exports and event lists are hidden or disabled
+in the UI and rejected in the backend. Snapshot, live recording and preview capture use the
+existing decoded-frame paths. No FFmpeg executable or extra media server is required.
 
 ## Camera constraints the backend must respect
 

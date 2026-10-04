@@ -104,12 +104,12 @@ export function CameraCard({
                 {strings.home.live}
               </Link>
             </Button>
-            <Button asChild size="sm" variant="overlay">
+            {camera.brand !== "qubo" && <Button asChild size="sm" variant="overlay">
               <Link to="/cameras/$cameraId" params={{ cameraId: camera.id }} search={{ tab: "playback" }}>
                 <History />
                 {strings.home.playback}
               </Link>
-            </Button>
+            </Button>}
           </div>
         )}
       </div>
@@ -135,11 +135,11 @@ export function CameraCard({
             )}
           </div>
           <p className="mt-1 truncate text-xs text-fg-3">
-            {camera.host}
+            {camera.brand === "qubo" ? strings.qubo.cloud : camera.host}
             {groupNames && ` · ${groupNames}`}
           </p>
         </div>
-        <StorageUsage storage={camera.storage} state={camera.status.state} className="mt-auto" />
+        {camera.brand === "qubo" ? <p className="mt-auto text-xs text-fg-3">{strings.qubo.liveOnly}</p> : <StorageUsage storage={camera.storage} state={camera.status.state} className="mt-auto" />}
       </div>
     </motion.article>
   );

@@ -5,10 +5,15 @@
 //! sent to the player are wall-clock microseconds (UTC), so the playback timeline can
 //! follow the picture directly.
 //!
-//! Speeds: 1× playback uses the camera's `playback` request, which the camera paces.
-//! Other speeds use the `download` request (the camera sends ~7× real time with every
-//! frame) and pace frames here; the download window acknowledgements turn our pacing
-//! into backpressure on the camera. Above 4× only keyframes are sent. Audio plays at 1×.
+//! Tapo cameras: speeds work as follows. 1× playback uses the camera's `playback`
+//! request, which the camera paces. Other speeds use the `download` request (the
+//! camera sends ~7× real time with every frame) and pace frames here; the download
+//! window acknowledgements turn our pacing into backpressure on the camera. Above 4×
+//! only keyframes are sent. Audio plays at 1×.
+//!
+//! Qubo cameras: live view only, from the cloud's RTSPS relay (see `qubo/`). The
+//! cloud's URL is short-lived, so it is requested per stream; there is no playback of
+//! SD-card recordings through the cloud.
 //!
 //! A stream runs until the page closes it, the camera ends it, or the webview that opened it
 //! loads a new document (see `close_webview`).
@@ -26,7 +31,8 @@ use tokio::time::Instant;
 
 use crate::cameras::{CameraHandle, CameraManager, ClockInfo};
 use crate::error::{ApiError, ApiResult};
-use crate::model::{StreamQuality, StreamRequest};
+use crate::model::{Brand, StreamQuality, StreamRequest};
+use crate::qubo::{self, Qubo};
 use crate::wire::{self, Status, StreamState};
 
 /// Give up when the camera sends nothing for this long.
@@ -35,6 +41,8 @@ const STALL_TIMEOUT: Duration = Duration::from_secs(15);
 const PACE_LEAD: Duration = Duration::from_millis(400);
 /// How far a download request reaches; playback past it ends the stream.
 const DOWNLOAD_SPAN_SECONDS: i64 = 6 * 3600;
+/// How long the Qubo live relay may take to connect and answer `DESCRIBE`/`PLAY`.
+const QUBO_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 fn now_us() -> i64 {
     jiff::Timestamp::now().as_microsecond()
@@ -147,6 +155,7 @@ fn parse_start(start: &str) -> ApiResult<i64> {
 
 pub struct Streams {
     cameras: Arc<CameraManager>,
+    qubo: Arc<Qubo>,
     player_id: String,
     tasks: Mutex<HashMap<String, Task>>,
 }
@@ -158,11 +167,12 @@ struct Task {
 }
 
 impl Streams {
-    pub fn new(cameras: Arc<CameraManager>) -> Self {
+    pub fn new(cameras: Arc<CameraManager>, qubo: Arc<Qubo>) -> Self {
         let mut id = [0u8; 8];
         getrandom::fill(&mut id).expect("OS random number generator");
         Self {
             cameras,
+            qubo,
             player_id: format!("backsight-{}", hex::encode(id)),
             tasks: Mutex::new(HashMap::new()),
         }
@@ -180,6 +190,12 @@ impl Streams {
             }
         };
         let handle = self.cameras.get(&camera_id)?;
+        if handle.brand() == Brand::Qubo && matches!(request, StreamRequest::Playback { .. }) {
+            return Err(ApiError::new(
+                "unsupported",
+                "Qubo SD-card playback is not supported yet.",
+            ));
+        }
         if let StreamRequest::Playback { start, speed, .. } = &request {
             parse_start(start)?;
             if !(*speed > 0.0 && *speed <= 16.0) {
@@ -248,6 +264,9 @@ impl Streams {
         request: &StreamRequest,
         channel: &Channel,
     ) -> ApiResult<()> {
+        if handle.brand() == Brand::Qubo {
+            return self.run_qubo(handle, request, channel).await;
+        }
         let clock = handle.clock().unwrap_or(ClockInfo {
             correction: 0,
             utc_offset_minutes: 0,
@@ -389,6 +408,100 @@ impl Streams {
                 send(channel, batch)?;
             }
         }
+    }
+
+    /// Feeds the relay's H.264 access units into the same channel as Tapo video.
+    async fn run_qubo(
+        &self,
+        handle: &CameraHandle,
+        request: &StreamRequest,
+        channel: &Channel,
+    ) -> ApiResult<()> {
+        let StreamRequest::Live { quality, .. } = request else {
+            return Err(ApiError::new(
+                "unsupported",
+                "Qubo SD-card playback is not supported yet.",
+            ));
+        };
+        let quality = match quality {
+            StreamQuality::Hd => "high",
+            StreamQuality::Sd => "low",
+        };
+        let ticket = self
+            .qubo
+            .stream_ticket(&handle.device_uuid(), quality)
+            .await?;
+        let mut session = tokio::time::timeout(
+            QUBO_CONNECT_TIMEOUT,
+            qubo::rtsp::RtspSession::connect(&ticket.stream_url, QUBO_CONNECT_TIMEOUT),
+        )
+        .await
+        .map_err(|_| ApiError::new("offline", "The Qubo live relay did not answer in time."))??;
+        let mut depacketizer = qubo::video::VideoDepacketizer::default()
+            .with_codec(if session.codec == "H265" {
+                tapo_camera::media::VideoCodec::H265
+            } else {
+                tapo_camera::media::VideoCodec::H264
+            })
+            .with_parameter_sets(&session.parameter_sets);
+        let mut mapper = TimeMapper::new(
+            true,
+            None,
+            ClockInfo {
+                correction: 0,
+                utc_offset_minutes: 0,
+            },
+        );
+        let mut events = Vec::new();
+        let mut playing = false;
+        let mut last_frame = Instant::now();
+        let result = async {
+            loop {
+                let packet = tokio::time::timeout(STALL_TIMEOUT, session.next_packet())
+                    .await
+                    .map_err(|_| {
+                        ApiError::new("offline", "The Qubo relay stopped sending video.")
+                    })??;
+                let Some(packet) = packet else {
+                    return Ok(());
+                };
+                depacketizer.push(&packet, &mut events);
+                let mut batch = Vec::new();
+                for event in events.drain(..) {
+                    match event {
+                        MediaEvent::VideoConfig(config) => {
+                            wire::push_video_config(&mut batch, now_us(), true, &config)
+                        }
+                        MediaEvent::Video(frame) => {
+                            last_frame = Instant::now();
+                            wire::push_video_frame(
+                                &mut batch,
+                                mapper.map(frame.pts),
+                                false,
+                                &frame,
+                            );
+                            if !playing {
+                                playing = true;
+                                send_status(channel, StreamState::Playing, None);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                if !batch.is_empty() {
+                    send(channel, batch)?;
+                }
+                if last_frame.elapsed() > STALL_TIMEOUT {
+                    return Err(ApiError::new(
+                        "offline",
+                        "The Qubo relay is not sending decodable video.",
+                    ));
+                }
+            }
+        }
+        .await;
+        let _ = tokio::time::timeout(Duration::from_secs(2), session.teardown()).await;
+        result
     }
 }
 

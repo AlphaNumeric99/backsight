@@ -47,6 +47,7 @@ export interface StorageInfo {
 export interface Camera {
   id: CameraId;
   name: string;
+  brand: "tapo" | "qubo";
   host: string;
   model?: string;
   firmware?: string;
@@ -108,6 +109,20 @@ export interface UpdateCameraRequest {
   cloudPassword?: string;
   /** `null` removes the stored camera account. */
   cameraAccount?: CameraAccount | null;
+}
+
+/** A camera belonging to the signed-in Qubo cloud account. */
+export interface QuboCloudDevice {
+  deviceUuid: string;
+  name?: string;
+  model?: string;
+  alreadyAdded: boolean;
+}
+
+export interface AddQuboCameraRequest {
+  deviceUuid: string;
+  name?: string;
+  groupIds?: string[];
 }
 
 export type RecordingKind = "continuous" | "detection";
@@ -245,6 +260,9 @@ export interface BacksightApi {
   discover(timeoutMs?: number): Promise<DiscoveredDevice[]>;
   /** Logs in once to verify the credentials, then saves the camera. */
   addCamera(req: AddCameraRequest): Promise<Camera>;
+  /** Signs in with the owner's Qubo account; secrets stay in the OS keychain. */
+  listQuboDevices(account: CameraAccount): Promise<QuboCloudDevice[]>;
+  addQuboCamera(req: AddQuboCameraRequest): Promise<Camera>;
   updateCamera(id: CameraId, req: UpdateCameraRequest): Promise<Camera>;
   removeCamera(id: CameraId): Promise<void>;
 

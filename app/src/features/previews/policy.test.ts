@@ -8,6 +8,7 @@ function camera(patch: Partial<Camera> = {}): Camera {
   return {
     id: "c1",
     name: "Front Door",
+    brand: "tapo",
     host: "192.168.1.20",
     groupIds: [],
     favorite: false,
