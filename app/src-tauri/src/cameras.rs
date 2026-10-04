@@ -11,10 +11,11 @@ use tauri::{AppHandle, Emitter};
 use crate::db::{CameraRecord, Db};
 use crate::error::{ApiError, ApiResult};
 use crate::model::{
-    AddCameraRequest, AppEvent, Camera, CameraState, CameraStatus, DiscoveredDevice, StorageInfo,
-    UpdateCameraRequest,
+    AddCameraRequest, AddQuboCameraRequest, AppEvent, Brand, Camera, CameraState, CameraStatus,
+    DiscoveredDevice, QuboCloudDevice, StorageInfo, UpdateCameraRequest,
 };
 use crate::previews::{self, Previews};
+use crate::qubo::Qubo;
 use crate::secrets;
 
 /// Name of the Tauri event carrying [`AppEvent`]s to the UI.
@@ -40,7 +41,8 @@ struct LiveInfo {
 pub struct CameraHandle {
     pub id: String,
     record: RwLock<CameraRecord>,
-    client: RwLock<Arc<tapo_camera::Camera>>,
+    /// The Tapo control client; cloud cameras (Qubo) have none.
+    client: RwLock<Option<Arc<tapo_camera::Camera>>>,
     status: RwLock<CameraStatus>,
     info: RwLock<LiveInfo>,
     user_id: tokio::sync::Mutex<Option<u64>>,
@@ -48,11 +50,11 @@ pub struct CameraHandle {
 }
 
 impl CameraHandle {
-    fn new(record: CameraRecord, client: tapo_camera::Camera) -> Self {
+    fn new(record: CameraRecord, client: Option<tapo_camera::Camera>) -> Self {
         Self {
             id: record.id.clone(),
             record: RwLock::new(record),
-            client: RwLock::new(Arc::new(client)),
+            client: RwLock::new(client.map(Arc::new)),
             status: RwLock::new(CameraStatus::new(CameraState::Connecting)),
             info: RwLock::new(LiveInfo::default()),
             user_id: tokio::sync::Mutex::new(None),
@@ -60,8 +62,30 @@ impl CameraHandle {
         }
     }
 
-    pub fn client(&self) -> Arc<tapo_camera::Camera> {
-        self.client.read().expect("client lock").clone()
+    /// How this camera is reached.
+    pub fn brand(&self) -> Brand {
+        self.record().brand
+    }
+
+    /// The cloud device id of a Qubo camera (its `host` column).
+    pub fn device_uuid(&self) -> String {
+        self.record().host
+    }
+
+    /// The Tapo control client; errors for cloud cameras, whose features are gated
+    /// off before this is reachable.
+    pub fn tapo_client(&self) -> ApiResult<Arc<tapo_camera::Camera>> {
+        self.client
+            .read()
+            .expect("client lock")
+            .clone()
+            .ok_or_else(|| {
+                ApiError::new(
+                    "unsupported",
+                    "This camera is a Qubo cloud camera; this feature needs a camera with an \
+                     SD card on your network.",
+                )
+            })
     }
 
     pub fn record(&self) -> CameraRecord {
@@ -88,7 +112,7 @@ impl CameraHandle {
         if let (Some(id), false) = (*cached, refresh) {
             return Ok(id);
         }
-        let id = self.client().user_id().await?;
+        let id = self.tapo_client()?.user_id().await?;
         *cached = Some(id);
         Ok(id)
     }
@@ -98,10 +122,11 @@ impl CameraHandle {
         *self
             .audio_rate
             .get_or_init(|| async {
-                self.client()
-                    .audio_config()
-                    .await
-                    .ok()
+                let config = match self.tapo_client() {
+                    Ok(client) => client.audio_config().await.ok(),
+                    Err(_) => None,
+                };
+                config
                     .and_then(|config| {
                         let rate = config.pointer("/microphone/sampling_rate")?;
                         rate.as_u64().or_else(|| rate.as_str()?.parse().ok())
@@ -120,6 +145,7 @@ impl CameraHandle {
         Camera {
             id: record.id,
             name: record.name,
+            brand: record.brand,
             host: record.host,
             model: record.model,
             firmware: record.firmware,
@@ -142,6 +168,7 @@ pub struct CameraManager {
     app: AppHandle,
     db: Arc<Db>,
     previews: Previews,
+    qubo: Arc<Qubo>,
     cameras: RwLock<HashMap<String, Arc<CameraHandle>>>,
 }
 
@@ -171,23 +198,47 @@ fn random_id() -> String {
     hex::encode(bytes)
 }
 
+/// The Qubo device types the cloud calls cameras: anything with video that isn't a
+/// phone or the app itself.
+fn is_qubo_camera(device: &crate::qubo::Device) -> bool {
+    let kind = device.device_type.as_str();
+    !matches!(kind, "mobile")
+        && (kind.to_ascii_lowercase().contains("cam") || kind == "videoDoorbell")
+}
+
 impl CameraManager {
     /// Loads saved cameras and starts polling their status.
-    pub fn start(app: AppHandle, db: Arc<Db>, previews: Previews) -> ApiResult<Arc<Self>> {
+    pub fn start(
+        app: AppHandle,
+        db: Arc<Db>,
+        previews: Previews,
+        qubo: Arc<Qubo>,
+    ) -> ApiResult<Arc<Self>> {
         let manager = Arc::new(Self {
             app,
             db,
             previews,
+            qubo,
             cameras: RwLock::new(HashMap::new()),
         });
         for record in manager.db.cameras()? {
-            let password = secrets::cloud_password(&record.id).unwrap_or_default();
-            match client_for(&record, password) {
-                Ok(client) => {
-                    let handle = Arc::new(CameraHandle::new(record, client));
+            match record.brand {
+                Brand::Tapo => {
+                    let password = secrets::cloud_password(&record.id).unwrap_or_default();
+                    match client_for(&record, password) {
+                        Ok(client) => {
+                            let handle = Arc::new(CameraHandle::new(record, Some(client)));
+                            manager.insert(handle);
+                        }
+                        Err(err) => {
+                            tracing::warn!(camera = %record.id, %err, "could not create client")
+                        }
+                    }
+                }
+                Brand::Qubo => {
+                    let handle = Arc::new(CameraHandle::new(record, None));
                     manager.insert(handle);
                 }
-                Err(err) => tracing::warn!(camera = %record.id, %err, "could not create client"),
             }
         }
         let poller = manager.clone();
@@ -284,7 +335,55 @@ impl CameraManager {
 
     /// Polls clock, SD card and privacy mode in one request and updates the status.
     pub async fn refresh(&self, handle: &CameraHandle) {
-        let client = handle.client();
+        match handle.brand() {
+            Brand::Tapo => self.refresh_tapo(handle).await,
+            Brand::Qubo => self.refresh_qubo(handle).await,
+        }
+    }
+
+    async fn refresh_qubo(&self, handle: &CameraHandle) {
+        let status = match self.qubo.devices().await {
+            // The account answers and the camera is still on it: that is all a
+            // cloud poll can know. Storage and clock live on the camera's SD card,
+            // which the cloud doesn't expose.
+            Ok(devices)
+                if devices
+                    .iter()
+                    .any(|d| d.device_uuid == handle.device_uuid()) =>
+            {
+                CameraStatus {
+                    state: CameraState::Online,
+                    last_seen: Some(now_rfc3339()),
+                    ..CameraStatus::new(CameraState::Online)
+                }
+            }
+            Ok(_) => CameraStatus {
+                state: CameraState::Offline,
+                message: Some("The camera is no longer on the Qubo account.".into()),
+                ..CameraStatus::new(CameraState::Offline)
+            },
+            Err(err) => CameraStatus {
+                state: match err.code {
+                    "auth_failed" => CameraState::AuthFailed,
+                    _ => CameraState::Offline,
+                },
+                message: Some(err.message),
+                ..CameraStatus::new(CameraState::Offline)
+            },
+        };
+        let last_seen = handle.status().last_seen;
+        let mut status = status;
+        if status.state != CameraState::Online {
+            status.last_seen = last_seen;
+        }
+        self.set_status(handle, status);
+    }
+
+    async fn refresh_tapo(&self, handle: &CameraHandle) {
+        // Dispatched by `refresh`, which only sends Tapo cameras here.
+        let client = handle
+            .tapo_client()
+            .expect("refresh_tapo is only called for Tapo cameras");
         let calls = [
             (
                 "getClockStatus",
@@ -434,6 +533,7 @@ impl CameraManager {
                 .filter(|n| !n.trim().is_empty())
                 .or_else(|| text("device_alias"))
                 .unwrap_or_else(|| host.clone()),
+            brand: Brand::Tapo,
             host,
             model: text("device_model"),
             firmware: text("sw_version"),
@@ -451,7 +551,80 @@ impl CameraManager {
         }
         self.db.upsert_camera(&record)?;
 
-        let handle = Arc::new(CameraHandle::new(record, client));
+        let handle = Arc::new(CameraHandle::new(record, Some(client)));
+        self.insert(handle.clone());
+        self.refresh(&handle).await;
+        self.emit(AppEvent::CamerasChanged);
+        Ok(self.api(&handle))
+    }
+
+    /// Signs in to the Qubo account and lists its cameras. Storing the account here
+    /// is what "adding" a Qubo camera means: the cameras themselves are only
+    /// references into the account.
+    pub async fn qubo_devices(
+        &self,
+        account: &crate::model::CameraAccount,
+    ) -> ApiResult<Vec<QuboCloudDevice>> {
+        let devices = self.qubo.sign_in(account).await?;
+        let known: Vec<CameraRecord> = self.handles().iter().map(|h| h.record()).collect();
+        Ok(devices
+            .into_iter()
+            .filter(is_qubo_camera)
+            .map(|d| QuboCloudDevice {
+                already_added: known.iter().any(|r| r.host == d.device_uuid),
+                device_uuid: d.device_uuid,
+                name: (!d.device_name.is_empty()).then_some(d.device_name),
+                model: Some(d.device_type),
+            })
+            .collect())
+    }
+
+    pub async fn add_qubo(&self, request: AddQuboCameraRequest) -> ApiResult<Camera> {
+        let device_uuid = request.device_uuid.trim().to_owned();
+        if device_uuid.is_empty() {
+            return Err(ApiError::invalid("Pick a camera from the account."));
+        }
+        if self
+            .handles()
+            .iter()
+            .any(|h| h.brand() == Brand::Qubo && h.device_uuid() == device_uuid)
+        {
+            return Err(ApiError::invalid("This camera is already added."));
+        }
+        let Some(device) = self
+            .qubo
+            .devices()
+            .await?
+            .into_iter()
+            .find(|d| d.device_uuid == device_uuid)
+        else {
+            return Err(ApiError::not_found("qubo camera"));
+        };
+        if !is_qubo_camera(&device) {
+            return Err(ApiError::invalid("This Qubo device is not a camera."));
+        }
+
+        let record = CameraRecord {
+            id: random_id(),
+            name: request
+                .name
+                .filter(|n| !n.trim().is_empty())
+                .or_else(|| (!device.device_name.is_empty()).then_some(device.device_name.clone()))
+                .unwrap_or_else(|| device.device_type.clone()),
+            brand: Brand::Qubo,
+            host: device.device_uuid.clone(),
+            model: Some(device.device_type),
+            firmware: None,
+            mac: device.mac_address,
+            group_ids: request.group_ids.unwrap_or_default(),
+            favorite: false,
+            has_camera_account: false,
+            cert_pin: None,
+            created_at: now_rfc3339(),
+        };
+        self.db.upsert_camera(&record)?;
+
+        let handle = Arc::new(CameraHandle::new(record, None));
         self.insert(handle.clone());
         self.refresh(&handle).await;
         self.emit(AppEvent::CamerasChanged);
@@ -463,12 +636,26 @@ impl CameraManager {
         let mut record = handle.record();
 
         if let Some(password) = request.cloud_password.filter(|p| !p.is_empty()) {
-            // Verify before replacing the working password.
-            let client = client_for(&record, password.clone())?;
-            client.login().await?;
-            secrets::set_cloud_password(id, &password)?;
-            *handle.client.write().expect("client lock") = Arc::new(client);
-            *handle.user_id.lock().await = None;
+            match record.brand {
+                Brand::Tapo => {
+                    // Verify before replacing the working password.
+                    let client = client_for(&record, password.clone())?;
+                    client.login().await?;
+                    secrets::set_cloud_password(id, &password)?;
+                    *handle.client.write().expect("client lock") = Some(Arc::new(client));
+                    *handle.user_id.lock().await = None;
+                }
+                Brand::Qubo => {
+                    // The Qubo account is shared; verify it before replacing it.
+                    let account = crate::model::CameraAccount {
+                        username: secrets::qubo_account()
+                            .map(|a| a.username)
+                            .unwrap_or_default(),
+                        password,
+                    };
+                    self.qubo.sign_in(&account).await?;
+                }
+            }
         }
         if let Some(name) = request.name.filter(|n| !n.trim().is_empty()) {
             record.name = name.trim().to_owned();
@@ -479,16 +666,16 @@ impl CameraManager {
         if let Some(favorite) = request.favorite {
             record.favorite = favorite;
         }
-        match request.camera_account {
-            Some(Some(account)) => {
+        match (record.brand, request.camera_account) {
+            (Brand::Tapo, Some(Some(account))) => {
                 secrets::set_camera_account(id, &account)?;
                 record.has_camera_account = true;
             }
-            Some(None) => {
+            (Brand::Tapo, Some(None)) => {
                 secrets::delete_camera_account(id);
                 record.has_camera_account = false;
             }
-            None => {}
+            _ => {}
         }
 
         self.db.upsert_camera(&record)?;
@@ -498,12 +685,15 @@ impl CameraManager {
         Ok(self.api(&handle))
     }
 
-    pub fn remove(&self, id: &str) -> ApiResult<()> {
-        self.get(id)?;
+    pub async fn remove(&self, id: &str) -> ApiResult<()> {
+        let qubo = self.get(id)?.brand() == Brand::Qubo;
         self.db.delete_camera(id)?;
         secrets::delete_all(id);
         self.previews.remove(id);
         self.cameras.write().expect("cameras lock").remove(id);
+        if qubo && !self.handles().iter().any(|h| h.brand() == Brand::Qubo) {
+            self.qubo.forget().await;
+        }
         self.emit(AppEvent::CamerasChanged);
         Ok(())
     }
@@ -637,6 +827,27 @@ pub fn parse_storage(value: &Value) -> Option<StorageInfo> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    fn qubo_device(kind: &str) -> crate::qubo::Device {
+        crate::qubo::Device {
+            device_uuid: "d".into(),
+            device_type: kind.into(),
+            device_name: String::new(),
+            mac_address: None,
+            unit_uuid: String::new(),
+        }
+    }
+
+    #[test]
+    fn qubo_camera_kinds() {
+        // The Smart Cam 360 3MP reports as a ptz camera.
+        assert!(is_qubo_camera(&qubo_device("ptzCamera3MP")));
+        assert!(is_qubo_camera(&qubo_device("cam3602K4MP")));
+        assert!(is_qubo_camera(&qubo_device("videoDoorbell")));
+        // Phones and this app are not cameras.
+        assert!(!is_qubo_camera(&qubo_device("mobile")));
+        assert!(!is_qubo_camera(&qubo_device("smartPlugWifi10A")));
+    }
 
     #[test]
     fn clock_offset_and_correction() {

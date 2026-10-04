@@ -19,6 +19,8 @@ export function createTauriApi(): BacksightApi {
     getCamera: (id) => invoke("get_camera", { id }),
     discover: (timeoutMs) => invoke("discover", { timeoutMs }),
     addCamera: (req) => invoke("add_camera", { req }),
+    listQuboDevices: (account) => invoke("list_qubo_devices", { account }),
+    addQuboCamera: (req) => invoke("add_qubo_camera", { req }),
     updateCamera: (id, req) => invoke("update_camera", { id, req }),
     removeCamera: (id) => invoke("remove_camera", { id }),
 

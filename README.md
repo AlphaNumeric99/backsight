@@ -1,11 +1,11 @@
 # Backsight
 
-**A desktop viewer for Tapo cameras**: live view, SD-card playback on a timeline, detection
+**A desktop viewer for Tapo and Qubo cameras**: live view, Tapo SD-card playback on a timeline, detection
 events, clip export and a multi-camera grid, on Windows, macOS and Linux.
 
 TP-Link's Tapo app only lets you browse a camera's SD-card recordings on a phone. Backsight
-brings that to the desktop. It talks to your cameras directly over your local network; nothing
-goes through a cloud service.
+brings that to the desktop. Tapo connections stay on your local network. Qubo live view uses
+the owner's Qubo account and the vendor's cloud relay.
 
 > **Status:** early, but working end to end on Windows with Tapo C325WB cameras (firmware
 > 1.2.6 and 1.4.4). Other models on the same firmware generation should work; reports welcome.
@@ -27,9 +27,13 @@ footage — so the video is an ffmpeg test pattern.</sub>
 - **Clip & download** to MP4 (H.264/H.265) at up to ~7× real time, with AAC audio on Windows
   (other platforms export video only for now).
 - **Multi-view** grid (1, 2, 4, 1+5, 9 or 16 cameras).
+- **Qubo live view** through its signed RTSPS cloud relay, with automatic token renewal.
+  Verified with the Smart Cam 360 3MP at 2304×1296 (H.265), with AAC audio decoded to PCM.
+  Qubo SD-card playback, events and SD-card exports are not supported yet.
 - **Camera cards** with a recent picture of each camera, grabbed in the background and
   refreshed while you watch.
-- Passwords stay in your OS keychain; the cameras' TLS certificates are pinned on first use.
+- Passwords and Qubo session tokens stay in your OS keychain. Tapo camera certificates
+  are pinned on first use; Qubo HTTPS and RTSPS use normal public-certificate validation.
 
 **Playback** puts the day on a zoomable timeline — the recorded band, colour-coded detection
 events, and the event list beside it:
@@ -48,6 +52,8 @@ only offers TP-Link's newer "TPAP" login.
 - Tapo cameras reachable on your LAN, with an SD card for recordings.
 - **Third-Party Compatibility** turned on in the Tapo app (Me → Third-Party Services).
 - The TP-Link account password of the camera's owner. The camera checks it locally.
+- For Qubo: an email/password Qubo account with the camera already set up in the Qubo app,
+  and an internet connection. The implementation currently supports one Qubo account.
 - Windows 10/11 with WebView2 (preinstalled). macOS and Linux builds are produced by CI but
   less tested. H.265 cameras need the free "HEVC Video Extensions" on Windows.
 
@@ -59,6 +65,11 @@ only offers TP-Link's newer "TPAP" login.
 
 Exports go to `Videos/Backsight` by default (change it in Settings).
 
+For Qubo, choose **Add from a Qubo account** in the add-camera dialog, sign in, and pick
+a camera. The same Live and Multi-view players display its feed. The observed access-token
+lifetime is one hour and refresh-token lifetime is 180 days; the backend reads the token's
+expiry and refreshes before it expires. Revocation can require signing in again sooner.
+
 ## Repository layout
 
 | Path | What |
@@ -67,6 +78,7 @@ Exports go to `Videos/Backsight` by default (change it in Settings).
 | `crates/tapo-cli` | `tapo` command-line tool (`tapo remux` for camera MPEG-TS → MP4) |
 | `crates/tapo-mock` | A fake camera (login, API, media stream) for tests and development |
 | `app/` | The Tauri 2 desktop app (Rust backend in `app/src-tauri`, React UI in `app/src`) |
+| `app/src-tauri/src/qubo/` | Qubo cloud account, signed live tickets, RTSPS and RTP video depacketization |
 | `docs/` | [Architecture](docs/ARCHITECTURE.md): contracts, wire format, camera constraints |
 
 ## Development
@@ -97,6 +109,13 @@ Handy for development:
   ```
 
   Doctests run separately — see [CONTRIBUTING.md](CONTRIBUTING.md#why-the-two-test-commands).
+- An opt-in Qubo hardware check runs with `QUBO_TOKEN_FILE` pointing to a local JSON token
+  cache (`accessToken`, `refreshToken`, `uuid`):
+  `cargo test -p backsight live_relay_produces_decodable_video -- --ignored --nocapture`.
+  Set `QUBO_VIDEO_OUTPUT` to save the elementary video locally for an independent decoder
+  check. Never commit either file.
+  `QUBO_AUDIO_OUTPUT` optionally saves decoded signed 16-bit PCM locally; the hardware
+  check also verifies reception and decoding of the camera's AAC audio.
 
 ## Credits
 
@@ -109,8 +128,8 @@ Backsight stands on the shoulders of community reverse-engineering work, in part
 ## Disclaimer
 
 Backsight is an independent, unofficial project. It is **not affiliated with, endorsed by, or
-supported by TP-Link**. "Tapo" and "TP-Link" are trademarks of their respective owners and are
-used here only to describe compatibility. Backsight uses the cameras' local interfaces for
+supported by TP-Link or Hero Electronix**. "Tapo", "TP-Link" and "Qubo" are trademarks of their respective owners and are
+used here only to describe compatibility. Backsight uses local and authenticated cloud interfaces for
 interoperability, with credentials you own. It is provided as is, without warranty of any kind;
 use it at your own risk.
 

@@ -109,7 +109,7 @@ export const strings = {
     noPreview: "No preview yet",
     gettingPreview: "Getting a preview…",
     emptyTitle: "No cameras yet",
-    emptyBody: "Add a Tapo camera on your network to watch it live and browse its SD card from your desktop.",
+    emptyBody: "Add a Tapo camera from your network or sign in to a Qubo account to watch your cameras from the desktop.",
     emptyChecklistTitle: "You'll need",
     emptyChecklist: [
       "The camera on the same network as this computer",
@@ -186,6 +186,24 @@ export const strings = {
     successBody: "The camera is saved. You can watch it live or browse its recordings.",
     openLive: "Open live view",
     toast: (name: string) => `${name} added`,
+  },
+
+  qubo: {
+    cloud: "Qubo cloud",
+    add: "Add from a Qubo account",
+    title: "Sign in to Qubo",
+    description: "Use the account that owns your camera. Live video connects through Qubo’s cloud and needs internet access.",
+    email: "Qubo account email",
+    password: "Qubo account password",
+    signIn: "Find my cameras",
+    choose: "Choose a camera",
+    empty: "No cameras found on this account.",
+    passwordHelp: "Backsight stores your account and session tokens in the system keychain. Sign-in is renewed automatically.",
+    success: "The camera is saved. Open live view to watch it through Qubo’s cloud.",
+    liveOnly: "Live view only",
+    playbackUnavailable: "Qubo SD-card playback is not supported yet.",
+    passwordUpdate: "This updates the shared Qubo account password for all your Qubo cameras.",
+    viewerTime: "Viewer time",
   },
 
   errors: {

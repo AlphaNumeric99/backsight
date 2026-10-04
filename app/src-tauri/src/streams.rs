@@ -5,10 +5,15 @@
 //! sent to the player are wall-clock microseconds (UTC), so the playback timeline can
 //! follow the picture directly.
 //!
-//! Speeds: 1× playback uses the camera's `playback` request, which the camera paces.
-//! Other speeds use the `download` request (the camera sends ~7× real time with every
-//! frame) and pace frames here; the download window acknowledgements turn our pacing
-//! into backpressure on the camera. Above 4× only keyframes are sent. Audio plays at 1×.
+//! Tapo cameras: speeds work as follows. 1× playback uses the camera's `playback`
+//! request, which the camera paces. Other speeds use the `download` request (the
+//! camera sends ~7× real time with every frame) and pace frames here; the download
+//! window acknowledgements turn our pacing into backpressure on the camera. Above 4×
+//! only keyframes are sent. Audio plays at 1×.
+//!
+//! Qubo cameras: live view only, from the cloud's RTSPS relay (see `qubo/`). The
+//! cloud's URL is short-lived, so it is requested per stream; there is no playback of
+//! SD-card recordings through the cloud.
 //!
 //! A stream runs until the page closes it, the camera ends it, or the webview that opened it
 //! loads a new document (see `close_webview`).
@@ -26,7 +31,8 @@ use tokio::time::Instant;
 
 use crate::cameras::{CameraHandle, CameraManager, ClockInfo};
 use crate::error::{ApiError, ApiResult};
-use crate::model::{StreamQuality, StreamRequest};
+use crate::model::{Brand, StreamQuality, StreamRequest};
+use crate::qubo::{self, Qubo};
 use crate::wire::{self, Status, StreamState};
 
 /// Give up when the camera sends nothing for this long.
@@ -35,6 +41,8 @@ const STALL_TIMEOUT: Duration = Duration::from_secs(15);
 const PACE_LEAD: Duration = Duration::from_millis(400);
 /// How far a download request reaches; playback past it ends the stream.
 const DOWNLOAD_SPAN_SECONDS: i64 = 6 * 3600;
+/// How long the Qubo live relay may take to connect and answer `DESCRIBE`/`PLAY`.
+const QUBO_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 fn now_us() -> i64 {
     jiff::Timestamp::now().as_microsecond()
@@ -42,6 +50,47 @@ fn now_us() -> i64 {
 
 fn ticks_to_us(ticks: i64) -> i64 {
     ticks * 1_000_000 / 90_000
+}
+
+/// One RTP clock, anchored once. Sender reports align both tracks in the source's
+/// NTP clock; absent an initial report, arrival time is the live-view fallback.
+struct LiveRtpTimeline {
+    rate: u32,
+    last: Option<u32>,
+    ticks: i64,
+    anchor: Option<(i64, i64)>,
+}
+
+impl LiveRtpTimeline {
+    fn new(rate: u32) -> Self {
+        Self {
+            rate,
+            last: None,
+            ticks: 0,
+            anchor: None,
+        }
+    }
+
+    fn map(
+        &mut self,
+        timestamp: u32,
+        source_us: Option<i64>,
+        shared_offset: &mut Option<i64>,
+    ) -> i64 {
+        self.ticks = match self.last {
+            Some(last) => self.ticks + i64::from(timestamp.wrapping_sub(last) as i32),
+            None => i64::from(timestamp),
+        };
+        self.last = Some(timestamp);
+        let (ticks, wall) = *self.anchor.get_or_insert_with(|| {
+            let wall = match source_us {
+                Some(source) => source + *shared_offset.get_or_insert_with(|| now_us() - source),
+                None => now_us(),
+            };
+            (self.ticks, wall)
+        });
+        wall + (self.ticks - ticks) * 1_000_000 / i64::from(self.rate)
+    }
 }
 
 /// Maps the demuxer's 90 kHz timestamps to wall-clock microseconds.
@@ -147,6 +196,7 @@ fn parse_start(start: &str) -> ApiResult<i64> {
 
 pub struct Streams {
     cameras: Arc<CameraManager>,
+    qubo: Arc<Qubo>,
     player_id: String,
     tasks: Mutex<HashMap<String, Task>>,
 }
@@ -158,11 +208,12 @@ struct Task {
 }
 
 impl Streams {
-    pub fn new(cameras: Arc<CameraManager>) -> Self {
+    pub fn new(cameras: Arc<CameraManager>, qubo: Arc<Qubo>) -> Self {
         let mut id = [0u8; 8];
         getrandom::fill(&mut id).expect("OS random number generator");
         Self {
             cameras,
+            qubo,
             player_id: format!("backsight-{}", hex::encode(id)),
             tasks: Mutex::new(HashMap::new()),
         }
@@ -180,6 +231,12 @@ impl Streams {
             }
         };
         let handle = self.cameras.get(&camera_id)?;
+        if handle.brand() == Brand::Qubo && matches!(request, StreamRequest::Playback { .. }) {
+            return Err(ApiError::new(
+                "unsupported",
+                "Qubo SD-card playback is not supported yet.",
+            ));
+        }
         if let StreamRequest::Playback { start, speed, .. } = &request {
             parse_start(start)?;
             if !(*speed > 0.0 && *speed <= 16.0) {
@@ -248,6 +305,9 @@ impl Streams {
         request: &StreamRequest,
         channel: &Channel,
     ) -> ApiResult<()> {
+        if handle.brand() == Brand::Qubo {
+            return self.run_qubo(handle, request, channel).await;
+        }
         let clock = handle.clock().unwrap_or(ClockInfo {
             correction: 0,
             utc_offset_minutes: 0,
@@ -390,6 +450,150 @@ impl Streams {
             }
         }
     }
+
+    /// Feeds relay video and decoded AAC audio into the same wire format as Tapo.
+    async fn run_qubo(
+        &self,
+        handle: &CameraHandle,
+        request: &StreamRequest,
+        channel: &Channel,
+    ) -> ApiResult<()> {
+        let StreamRequest::Live { quality, .. } = request else {
+            return Err(ApiError::new(
+                "unsupported",
+                "Qubo SD-card playback is not supported yet.",
+            ));
+        };
+        let quality = match quality {
+            StreamQuality::Hd => "high",
+            StreamQuality::Sd => "low",
+        };
+        let ticket = self
+            .qubo
+            .stream_ticket(&handle.device_uuid(), quality)
+            .await?;
+        let mut session = tokio::time::timeout(
+            QUBO_CONNECT_TIMEOUT,
+            qubo::rtsp::RtspSession::connect(&ticket.stream_url, QUBO_CONNECT_TIMEOUT),
+        )
+        .await
+        .map_err(|_| ApiError::new("offline", "The Qubo live relay did not answer in time."))??;
+        let mut depacketizer = qubo::video::VideoDepacketizer::default()
+            .with_codec(if session.codec == "H265" {
+                tapo_camera::media::VideoCodec::H265
+            } else {
+                tapo_camera::media::VideoCodec::H264
+            })
+            .with_parameter_sets(&session.parameter_sets);
+        let mut video_time = LiveRtpTimeline::new(90_000);
+        let mut source_offset = None;
+        let mut audio = session
+            .audio
+            .clone()
+            .map(|track| {
+                Ok::<_, ApiError>((
+                    qubo::audio::Depacketizer::new(&track)?,
+                    qubo::audio::AacDecoder::new(&track)?,
+                    LiveRtpTimeline::new(track.sample_rate),
+                    tapo_camera::media::AudioConfig {
+                        codec: tapo_camera::media::AudioCodec::Aac,
+                        sample_rate: track.sample_rate,
+                        channels: track.channels,
+                    },
+                ))
+            })
+            .transpose()?;
+        let mut audio_units = Vec::new();
+        let mut pcm = Vec::new();
+        let mut audio_config_sent = false;
+        let mut events = Vec::new();
+        let mut playing = false;
+        let mut last_frame = Instant::now();
+        let result = async {
+            loop {
+                let packet = tokio::time::timeout(STALL_TIMEOUT, session.next_media_packet())
+                    .await
+                    .map_err(|_| {
+                        ApiError::new("offline", "The Qubo relay stopped sending video.")
+                    })??;
+                let Some(packet) = packet else {
+                    return Ok(());
+                };
+                let mut batch = Vec::new();
+                match packet {
+                    qubo::rtsp::MediaPacket::Video(packet) => {
+                        depacketizer.push(&packet, &mut events)
+                    }
+                    qubo::rtsp::MediaPacket::Audio(packet) => {
+                        if let Some((depacketizer, decoder, time, config)) = audio.as_mut() {
+                            if let Err(err) = depacketizer.push(&packet, &mut audio_units) {
+                                tracing::debug!(camera = %handle.id, %err, "discarding malformed Qubo audio packet");
+                                depacketizer.reset();
+                                audio_units.clear();
+                            }
+                            for unit in audio_units.drain(..) {
+                                if let Err(err) = decoder.decode(&unit, &mut pcm) {
+                                    tracing::debug!(camera = %handle.id, %err, "discarding malformed Qubo AAC frame");
+                                    decoder.reset();
+                                    continue;
+                                }
+                                if pcm.is_empty() {
+                                    continue;
+                                }
+                                let timestamp = time.map(
+                                    unit.timestamp,
+                                    session.source_time_us(true, unit.timestamp),
+                                    &mut source_offset,
+                                );
+                                if !audio_config_sent {
+                                    wire::push_audio_config(&mut batch, timestamp, false, config);
+                                    audio_config_sent = true;
+                                }
+                                wire::push_audio_pcm(&mut batch, timestamp, false, &pcm);
+                            }
+                        }
+                    }
+                }
+                for event in events.drain(..) {
+                    match event {
+                        MediaEvent::VideoConfig(config) => {
+                            wire::push_video_config(&mut batch, now_us(), true, &config)
+                        }
+                        MediaEvent::Video(frame) => {
+                            last_frame = Instant::now();
+                            wire::push_video_frame(
+                                &mut batch,
+                                video_time.map(
+                                    frame.pts as u32,
+                                    session.source_time_us(false, frame.pts as u32),
+                                    &mut source_offset,
+                                ),
+                                false,
+                                &frame,
+                            );
+                            if !playing {
+                                playing = true;
+                                send_status(channel, StreamState::Playing, None);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                if !batch.is_empty() {
+                    send(channel, batch)?;
+                }
+                if last_frame.elapsed() > STALL_TIMEOUT {
+                    return Err(ApiError::new(
+                        "offline",
+                        "The Qubo relay is not sending decodable video.",
+                    ));
+                }
+            }
+        }
+        .await;
+        let _ = tokio::time::timeout(Duration::from_secs(2), session.teardown()).await;
+        result
+    }
 }
 
 #[cfg(test)]
@@ -440,5 +644,16 @@ mod tests {
             waited >= Duration::from_millis(150) && waited < Duration::from_millis(600),
             "{waited:?}"
         );
+    }
+
+    #[test]
+    fn live_audio_and_video_share_sender_report_time() {
+        let mut video = LiveRtpTimeline::new(90_000);
+        let mut audio = LiveRtpTimeline::new(16_000);
+        let mut offset = Some(10_000_000);
+        assert_eq!(video.map(90_000, Some(1_000_000), &mut offset), 11_000_000);
+        assert_eq!(audio.map(8000, Some(1_100_000), &mut offset), 11_100_000);
+        assert_eq!(audio.map(9024, None, &mut offset), 11_164_000);
+        assert_eq!(video.map(99_000, None, &mut offset), 11_100_000);
     }
 }

@@ -160,6 +160,7 @@ export function createMockData(options: MockDataOptions = {}): Omit<BacksightApi
   /** Hosts locked out by failed logins during this session, with when they unlock. */
   const lockouts = new Map<string, number>();
   let nextId = 1;
+  let quboSignedIn = false;
 
   const toCamera = (f: MockCameraFixture, t0: number): Camera => {
     const status: CameraStatus = { state: f.state };
@@ -173,6 +174,7 @@ export function createMockData(options: MockDataOptions = {}): Omit<BacksightApi
     return {
       id: f.id,
       name: f.name,
+      brand: "tapo",
       host: f.host,
       model: f.model,
       firmware: f.firmware,
@@ -400,6 +402,28 @@ export function createMockData(options: MockDataOptions = {}): Omit<BacksightApi
       return clone(camera);
     },
 
+    async listQuboDevices(account) {
+      await wait();
+      if (!account.username.trim() || !account.password || account.password === "wrong") {
+        throw apiError("auth_failed", "The Qubo cloud rejected the account.");
+      }
+      quboSignedIn = true;
+      return [{ deviceUuid: "qubo-360", name: "Cam 360 3MP", model: "ptzCamera3MP", alreadyAdded: cameras.some((c) => c.brand === "qubo" && c.host === "qubo-360") }];
+    },
+
+    async addQuboCamera(req) {
+      await wait();
+      if (!quboSignedIn) throw apiError("auth_failed", "Sign in to Qubo first.");
+      if (req.deviceUuid !== "qubo-360") throw apiError("not_found", "No camera with that id.");
+      if (cameras.some((c) => c.host === req.deviceUuid)) throw apiError("invalid_input", "This camera is already added.");
+      const fixture = newCameraFixture({ id: `cam-qubo-${nextId++}`, host: req.deviceUuid, name: req.name?.trim() || "Cam 360 3MP", model: "ptzCamera3MP" });
+      fixtures.set(fixture.id, fixture);
+      const camera: Camera = { ...toCamera(fixture, now()), brand: "qubo", storage: undefined, videoCodec: "h265", groupIds: req.groupIds ?? [] };
+      cameras.push(camera);
+      emit({ type: "cameras-changed" });
+      return clone(camera);
+    },
+
     async updateCamera(id, req: UpdateCameraRequest) {
       await wait();
       const cam = findCamera(id);
@@ -456,6 +480,7 @@ export function createMockData(options: MockDataOptions = {}): Omit<BacksightApi
     async getDaysWithRecordings(cameraId, month: Month) {
       await wait();
       const cam = findCamera(cameraId);
+      if (cam.brand === "qubo") throw apiError("unsupported", "Qubo SD-card playback is not supported yet.");
       if (!/^\d{4}-\d{2}$/.test(month)) throw apiError("invalid_input", "Months look like 2026-09.");
       assertReachable(cam);
       return daysWithRecordings(fixtures.get(cameraId)!, month, cam.utcOffsetMinutes ?? offset, now());
@@ -464,6 +489,7 @@ export function createMockData(options: MockDataOptions = {}): Omit<BacksightApi
     async getDayIndex(cameraId, date: LocalDate) {
       await wait();
       const cam = findCamera(cameraId);
+      if (cam.brand === "qubo") throw apiError("unsupported", "Qubo SD-card playback is not supported yet.");
       if (!isLocalDate(date)) throw apiError("invalid_input", "Dates look like 2026-09-29.");
       assertReachable(cam);
       return generateDayIndex(fixtures.get(cameraId)!, date, cam.utcOffsetMinutes ?? offset, now());
@@ -472,6 +498,7 @@ export function createMockData(options: MockDataOptions = {}): Omit<BacksightApi
     async startExport(req) {
       await wait();
       const cam = findCamera(req.cameraId);
+      if (cam.brand === "qubo") throw apiError("unsupported", "Qubo SD-card export is not supported yet.");
       const start = Date.parse(req.start);
       const end = Date.parse(req.end);
       if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {

@@ -117,7 +117,8 @@ pub fn push_video_frame(
 }
 
 /// Appends an `AudioConfig` describing the PCM that follows. The backend decodes the camera's
-/// audio (G.711) to signed 16-bit PCM before sending it, so the format is always `s16le`.
+/// audio (Tapo G.711 or Qubo AAC) to signed 16-bit PCM before sending it, so the format
+/// is always `s16le`.
 pub fn push_audio_config(
     batch: &mut Vec<u8>,
     timestamp_us: i64,

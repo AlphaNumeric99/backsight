@@ -53,7 +53,7 @@ pub async fn days_with_recordings(handle: &CameraHandle, month: &str) -> ApiResu
     let last = first.last_of_month();
     let fmt = |d: jiff::civil::Date| d.strftime("%Y%m%d").to_string();
     let result = handle
-        .client()
+        .tapo_client()?
         .days_with_recordings(&fmt(first), &fmt(last))
         .await;
     let list = match result {
@@ -94,6 +94,7 @@ pub fn parse_days(list: &Value) -> Vec<String> {
 
 /// Recordings and detection events of one camera-local day, cached in the database.
 pub async fn day_index(handle: &CameraHandle, db: &Db, date: &str) -> ApiResult<DayIndex> {
+    let client = handle.tapo_client()?;
     let day = parse_date(date)?;
     let clock = clock_of(handle);
     let now = jiff::Timestamp::now().as_second();
@@ -114,7 +115,7 @@ pub async fn day_index(handle: &CameraHandle, db: &Db, date: &str) -> ApiResult<
         Err(err) if err.camera_code() == Some(-71105) => Value::Array(Vec::new()),
         Err(err) => return Err(err.into()),
     };
-    let events = match handle.client().detection_events(start, end).await {
+    let events = match client.detection_events(start, end).await {
         Ok(list) => list,
         Err(err) if err.camera_code() == Some(-71105) => Value::Array(Vec::new()),
         // Some models don't support the detection list; recordings still work.
@@ -140,14 +141,17 @@ pub async fn day_index(handle: &CameraHandle, db: &Db, date: &str) -> ApiResult<
 
 /// `searchVideoOfDay`, refreshing the playback user id once if the camera rejects it.
 async fn fetch_recordings(handle: &CameraHandle, date: &str) -> tapo_camera::Result<Value> {
+    let client = handle
+        .tapo_client()
+        .map_err(|err| tapo_camera::Error::Protocol(err.message))?;
     let user_id = match handle.user_id(false).await {
         Ok(id) => id,
-        Err(_) => return handle.client().recordings_of_day(date, 0).await,
+        Err(_) => return client.recordings_of_day(date, 0).await,
     };
-    match handle.client().recordings_of_day(date, user_id).await {
+    match client.recordings_of_day(date, user_id).await {
         Err(err) if err.camera_code() == Some(-71103) => {
             let fresh = handle.user_id(true).await.unwrap_or(user_id);
-            handle.client().recordings_of_day(date, fresh).await
+            client.recordings_of_day(date, fresh).await
         }
         other => other,
     }
