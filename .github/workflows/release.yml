@@ -1,0 +1,148 @@
+name: Release
+
+# Push a tag to build installers, e.g.:
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# The release is created as a DRAFT — nothing is visible to anyone until you review the
+# artifacts and publish it yourself. `workflow_dispatch` builds the same installers without
+# touching releases, for trying the pipeline out.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # A tag that disagrees with the version in the app would produce confusingly named
+  # artifacts, so stop before spending four runners on it.
+  check-version:
+    name: Check the tag matches the app version
+    runs-on: ubuntu-22.04
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          app="$(node -p "require('./app/src-tauri/tauri.conf.json').version")"
+          crate="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)"
+          echo "tag=$tag  tauri.conf.json=$app  Cargo.toml=$crate"
+          if [ "$tag" != "$app" ] || [ "$tag" != "$crate" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match the app version ($app) and workspace version ($crate)."
+            exit 1
+          fi
+
+  build:
+    name: ${{ matrix.name }}
+    needs: [check-version]
+    # `needs` is skipped along with check-version on workflow_dispatch, so allow that too.
+    if: always() && (needs.check-version.result == 'success' || needs.check-version.result == 'skipped')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            target: ""
+          - name: Linux
+            os: ubuntu-22.04
+            target: ""
+          - name: macOS (Apple silicon)
+            os: macos-latest
+            target: aarch64-apple-darwin
+          - name: macOS (Intel)
+            os: macos-latest
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      # The full Tauri 2 prerequisites — bundling needs more than CI's compile-only set.
+      - name: Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Install frontend dependencies
+        working-directory: app
+        run: npm ci
+
+      # Builds the frontend (tauri.conf.json's beforeBuildCommand) and the installers, then
+      # uploads them to a draft release. The action substitutes __VERSION__ from the app.
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: app
+          args: ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+          # Only the tag build touches releases; a manual run just proves the build works.
+          tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+          releaseName: ${{ startsWith(github.ref, 'refs/tags/v') && 'Backsight __VERSION__' || '' }}
+          releaseDraft: true
+          prerelease: false
+          releaseBody: |
+            ## Installing
+
+            | Platform | Download |
+            |---|---|
+            | Windows 10/11 | `.exe` (installer) or `.msi` |
+            | macOS, Apple silicon | `aarch64.dmg` |
+            | macOS, Intel | `x64.dmg` |
+            | Linux | `.AppImage` or `.deb` |
+
+            **These builds are not code-signed.** Windows SmartScreen will warn on first run —
+            choose "More info" then "Run anyway". On macOS, Gatekeeper will refuse to open the
+            app — right-click it and choose "Open", or allow it under System Settings → Privacy
+            & Security.
+
+            Cameras need **Third-Party Compatibility** turned on in the Tapo app
+            (Me → Third-Party Services). H.265 cameras need the free "HEVC Video Extensions" on
+            Windows.
+
+            Backsight is an independent, unofficial project, not affiliated with or endorsed by
+            TP-Link.
+
+      # On a manual run there is no release to attach to, so keep the installers as artifacts.
+      - name: Upload installers
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backsight-${{ matrix.target || runner.os }}
+          retention-days: 7
+          if-no-files-found: error
+          # Host builds land in target/release/bundle; --target builds in target/<triple>/release.
+          path: |
+            target/release/bundle/**/*.exe
+            target/release/bundle/**/*.msi
+            target/release/bundle/**/*.deb
+            target/release/bundle/**/*.rpm
+            target/release/bundle/**/*.AppImage
+            target/release/bundle/**/*.dmg
+            target/*/release/bundle/**/*.dmg

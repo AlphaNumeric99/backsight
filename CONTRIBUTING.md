@@ -92,6 +92,31 @@ These are the ones that bite:
 - A camera's clock is not necessarily UTC. Recording and event times are cached in camera-clock
   seconds and converted when served.
 
+## Releasing
+
+Installers are built by [`.github/workflows/release.yml`](.github/workflows/release.yml) on
+Windows, Linux and macOS (Apple silicon and Intel).
+
+1. Bump the version in all three places — they have to agree, and the workflow checks:
+   - `Cargo.toml` → `[workspace.package] version` (every crate inherits it)
+   - `app/src-tauri/tauri.conf.json` → `version`
+   - `app/package.json` → `version`
+2. Commit, then tag and push:
+
+   ```bash
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+
+3. The workflow builds each platform and collects the installers into a **draft** release.
+   Nothing is public until you review it and press publish.
+
+To exercise the pipeline without releasing anything, run the workflow manually from the Actions
+tab — it builds the same installers and attaches them to the run as artifacts instead.
+
+Builds are not code-signed, so Windows SmartScreen and macOS Gatekeeper warn on first run. The
+draft release notes say so.
+
 ## Reporting a bug
 
 Please include your camera model and firmware version, your OS, and what you expected versus
