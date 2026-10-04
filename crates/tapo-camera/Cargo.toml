@@ -9,6 +9,9 @@ authors.workspace = true
 readme = "README.md"
 keywords = ["tapo", "tp-link", "camera", "nvr", "mpeg-ts"]
 categories = ["api-bindings", "multimedia::video", "network-programming"]
+# Backsight ships as an application, not as crates. Use it from this repository with a git
+# dependency. The metadata above stays for `cargo doc` and for anyone vendoring the crate.
+publish = false
 
 [dependencies]
 aes = "0.9"
