@@ -31,9 +31,6 @@ footage — so the video is an ffmpeg test pattern.</sub>
   refreshed while you watch.
 - Passwords stay in your OS keychain; the cameras' TLS certificates are pinned on first use.
 
-Not yet: pan/tilt control, two-way audio, hubs and battery cameras, and cameras whose firmware
-only offers TP-Link's newer "TPAP" login.
-
 **Playback** puts the day on a zoomable timeline — the recorded band, colour-coded detection
 events, and the event list beside it:
 
@@ -42,6 +39,9 @@ events, and the event list beside it:
 **Live view** has the stream controls and what the camera reports about itself:
 
 ![The Live tab: the stream with snapshot, record, sound and fullscreen controls, connection and SD-card stats, and today's events](docs/images/live.png)
+
+Not yet: pan/tilt control, two-way audio, hubs and battery cameras, and cameras whose firmware
+only offers TP-Link's newer "TPAP" login.
 
 ## Requirements
 
