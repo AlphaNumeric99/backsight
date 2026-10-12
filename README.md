@@ -10,10 +10,10 @@ the owner's Qubo account and the vendor's cloud relay.
 > **Status:** early, but working end to end on Windows with Tapo C325WB cameras (firmware
 > 1.2.6 and 1.4.4). Other models on the same firmware generation should work; reports welcome.
 
-![The Cameras page, showing a card per camera with a recent picture, status and SD-card usage](docs/images/cameras.png)
+![Backsight: the camera wall, live view, the playback timeline with detection events, and the multi-camera grid](docs/images/demo.gif)
 
-<sub>All screenshots here come from the built-in demo cameras (`npm run dev`), not real
-footage — so the video is an ffmpeg test pattern.</sub>
+<sub>Everything shown here is the built-in demo cameras (`npm run dev`) — illustrated scenes,
+not anyone's real footage.</sub>
 
 ## Features
 
@@ -43,6 +43,10 @@ events, and the event list beside it:
 **Live view** has the stream controls and what the camera reports about itself:
 
 ![The Live tab: the stream with snapshot, record, sound and fullscreen controls, connection and SD-card stats, and today's events](docs/images/live.png)
+
+**Multi-view** puts several cameras on one screen, in layouts from 1 up to 16:
+
+![Multi-view: four camera tiles, each with a live badge and its bitrate](docs/images/multiview.png)
 
 Not yet: pan/tilt control, two-way audio, hubs and battery cameras, and cameras whose firmware
 only offers TP-Link's newer "TPAP" login.

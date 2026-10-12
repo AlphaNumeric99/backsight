@@ -11,7 +11,7 @@ import { encodeBatch, type Packet } from "../../player/wire";
 // decoder accepts, to show the codec_unsupported error anywhere; "short" plays the fixture once
 // and then ends.
 
-const FIXTURE_H264 = "testsrc2-720p15-h264.bspk";
+const FIXTURE_H264 = "demo-720p15-h264.bspk";
 const FIXTURE_H265 = "testsrc2-360p15-h265.bspk";
 /** An HEVC codec string with a profile that does not exist (Chromium rejects it). */
 const UNSUPPORTED_CODEC = "hvc1.99.0.L63.90";

@@ -6,10 +6,14 @@
 // Needs ffmpeg with libx264 and libx265 on PATH. Node 22.18+ runs the .ts import directly.
 //
 // Outputs:
-//   testsrc2-720p15-h264.bspk  10 s of ffmpeg's testsrc2 at 1280x720, 15 fps, H.264 Main with a
-//                              2 s GOP and no B-frames, plus a 440 Hz tone as 8 kHz mono s16le PCM.
-//                              A white square flashes bottom-left, and the tone gets louder, for
-//                              the first 100 ms of every second, to check A/V sync by eye and ear.
+//   demo-720p15-h264.bspk      12 s at 1280x720, 15 fps, H.264 Main with a 2 s GOP and no
+//                              B-frames, plus 8 kHz mono s16le PCM. A still of the mock's own
+//                              drawn "driveway" scene (demo-scene.png) with a clock burned into
+//                              the corner, the way the cameras themselves do it — so it looks
+//                              like a camera rather than a test card, which matters because this
+//                              is what `npm run dev` and the screenshots show. The clock ticks on
+//                              the second and the audio blips at the same instant, so A/V sync is
+//                              still checkable by eye and ear.
 //   testsrc2-360p15-h265.bspk  2 s at 640x360, H.265 Main, video only. Most webviews can't decode
 //                              it, which exercises the codec_unsupported path.
 //
@@ -27,6 +31,9 @@ import { decodeBatch, encodeBatch } from "../src/player/wire.ts";
 
 const OUT_DIR = fileURLToPath(new URL("../public/fixtures/", import.meta.url));
 const FPS = 15;
+const DEMO_SECONDS = 12;
+/** A monospace face for the burned-in clock, as the cameras use. */
+const FONT = process.platform === "win32" ? "C\\\\:/Windows/Fonts/consola.ttf" : "/System/Library/Fonts/Menlo.ttc";
 const AUDIO_RATE = 8000;
 /** Samples per AudioPcm packet: 40 ms, about what the backend sends per G.711 payload. */
 const AUDIO_CHUNK = 320;
@@ -441,21 +448,31 @@ function main() {
 
     const h264 = join(work, "video.h264");
     const pcm = join(work, "audio.pcm");
+    const scene = fileURLToPath(new URL("./demo-scene.png", import.meta.url));
+    // A fixed start time keeps the burned-in clock identical between rebuilds.
+    const clockStart = Math.floor(Date.parse("2026-06-15T09:04:05Z") / 1000);
     ffmpeg([
-      "-f", "lavfi",
-      "-i", `testsrc2=size=1280x720:rate=${FPS},drawbox=x=40:y=560:w=120:h=120:color=white:t=fill:enable='lt(mod(t,1),0.1)'`,
-      "-t", "10",
-      "-c:v", "libx264", "-profile:v", "main", "-level", "3.1", "-preset", "medium", "-pix_fmt", "yuv420p",
+      "-loop", "1", "-i", scene,
+      "-t", String(DEMO_SECONDS),
+      "-r", String(FPS),
+      "-vf", [
+        "scale=1280:720",
+        `drawtext=fontfile=${FONT}:text='%{pts\\:localtime\\:${clockStart}}':` +
+          "x=18:y=14:fontsize=26:fontcolor=white@0.92:shadowcolor=black@0.6:shadowx=1:shadowy=1",
+        "format=yuv420p",
+      ].join(","),
+      "-c:v", "libx264", "-profile:v", "main", "-level", "3.1", "-preset", "medium",
       "-bf", "0", "-g", "30", "-keyint_min", "30", "-sc_threshold", "0",
-      "-b:v", "1000k", "-maxrate", "1300k", "-bufsize", "1300k",
+      "-b:v", "900k", "-maxrate", "1200k", "-bufsize", "1200k",
       "-f", "h264", h264,
     ]);
+    // A quiet blip on each second, lining up with the clock changing.
     ffmpeg([
       "-f", "lavfi",
-      "-i", `aevalsrc=exprs='0.1*sin(2*PI*440*t)*(1+4*lt(mod(t,1),0.1))':s=${AUDIO_RATE}:d=10`,
+      "-i", `aevalsrc=exprs='0.12*sin(2*PI*880*t)*lt(mod(t,1),0.06)':s=${AUDIO_RATE}:d=${DEMO_SECONDS}`,
       "-ac", "1", "-f", "s16le", pcm,
     ]);
-    writeFixture("testsrc2-720p15-h264.bspk", h264Track(readFileSync(h264)), pcmTrack(readFileSync(pcm)));
+    writeFixture("demo-720p15-h264.bspk", h264Track(readFileSync(h264)), pcmTrack(readFileSync(pcm)));
 
     const h265 = join(work, "video.h265");
     ffmpeg([
