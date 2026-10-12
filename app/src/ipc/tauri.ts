@@ -23,6 +23,7 @@ export function createTauriApi(): BacksightApi {
     addQuboCamera: (req) => invoke("add_qubo_camera", { req }),
     updateCamera: (id, req) => invoke("update_camera", { id, req }),
     removeCamera: (id) => invoke("remove_camera", { id }),
+    trustCertificate: (id) => invoke("trust_certificate", { id }),
 
     listGroups: () => invoke("list_groups"),
     saveGroups: (groups) => invoke("save_groups", { groups }),

@@ -459,6 +459,18 @@ export function createMockData(options: MockDataOptions = {}): Omit<BacksightApi
       emit({ type: "cameras-changed" });
     },
 
+    async trustCertificate(id) {
+      await wait();
+      const cam = findCamera(id);
+      if (cam.status.state !== "certificate_changed") {
+        throw apiError("invalid_input", "This camera's certificate hasn't changed.");
+      }
+      cam.status = { state: "online", lastSeen: toIso(now()) };
+      emit({ type: "camera-status", cameraId: cam.id, status: clone(cam.status) });
+      emit({ type: "cameras-changed" });
+      return clone(cam);
+    },
+
     async listGroups() {
       await wait();
       return clone(groups);

@@ -104,6 +104,13 @@ pub async fn remove_camera(state: State<'_, AppState>, id: String) -> ApiResult<
     state.cameras.remove(&id).await
 }
 
+/// Pins the certificate the camera presents now. The UI only offers this after showing the
+/// owner the old and new fingerprints.
+#[tauri::command]
+pub async fn trust_certificate(state: State<'_, AppState>, id: String) -> ApiResult<Camera> {
+    state.cameras.trust_certificate(&id).await
+}
+
 #[tauri::command]
 pub async fn list_groups(state: State<'_, AppState>) -> ApiResult<Vec<CameraGroup>> {
     Ok(state.db.groups()?)

@@ -447,16 +447,29 @@ impl CameraManager {
                 }
             }
             Err(err) => {
+                // Keep the two fingerprints before the error is flattened into an ApiError,
+                // so the UI can show the owner what changed.
+                let fingerprints = match &err {
+                    tapo_camera::Error::CertificateMismatch { expected, actual } => {
+                        Some((expected.clone(), actual.clone()))
+                    }
+                    _ => None,
+                };
                 let api: ApiError = err.into();
                 let mut status = CameraStatus::new(match api.code {
                     "auth_failed" => CameraState::AuthFailed,
                     "camera_locked" => CameraState::Locked,
                     "unsupported" => CameraState::Unsupported,
+                    "certificate_changed" => CameraState::CertificateChanged,
                     _ => CameraState::Offline,
                 });
                 status.message = Some(api.message);
                 status.locked_until = api.retry_at;
                 status.last_seen = handle.status().last_seen;
+                if let Some((expected, actual)) = fingerprints {
+                    status.pinned_certificate = Some(expected);
+                    status.actual_certificate = Some(actual);
+                }
                 self.set_status(handle, status);
             }
         }
@@ -626,6 +639,51 @@ impl CameraManager {
 
         let handle = Arc::new(CameraHandle::new(record, None));
         self.insert(handle.clone());
+        self.refresh(&handle).await;
+        self.emit(AppEvent::CamerasChanged);
+        Ok(self.api(&handle))
+    }
+
+    /// Pins the certificate the camera presents now, replacing the one stored when it was
+    /// added. Only ever called because the owner looked at both fingerprints and said so.
+    ///
+    /// Before storing anything it logs in with the saved password. The camera proves it knows
+    /// that password during the handshake, which something merely answering at the same
+    /// address cannot do, so a successful login is good evidence this is the same camera with
+    /// a new certificate rather than an impersonator.
+    pub async fn trust_certificate(&self, id: &str) -> ApiResult<Camera> {
+        let handle = self.get(id)?;
+        let mut record = handle.record();
+        if record.brand != Brand::Tapo {
+            return Err(ApiError::invalid(
+                "Only Tapo cameras pin a certificate on this connection.",
+            ));
+        }
+        let password = secrets::cloud_password(id).ok_or_else(|| {
+            ApiError::new(
+                "auth_failed",
+                "No saved password for this camera. Remove it and add it again.",
+            )
+        })?;
+
+        // No pin, so the handshake accepts whatever is presented; the login is what vouches
+        // for it. A rejected password leaves the stored pin untouched.
+        let candidate = tapo_camera::Camera::new(
+            CameraConfig::new(&record.host, password).with_certificate(None),
+        )?;
+        candidate.login().await?;
+        let fingerprint = candidate
+            .certificate()
+            .await
+            .ok_or_else(|| ApiError::internal("the camera presented no certificate"))?;
+
+        record.cert_pin = Some(fingerprint.to_hex());
+        self.db.upsert_camera(&record)?;
+        *handle.record.write().expect("record lock") = record;
+        *handle.client.write().expect("client lock") = Some(Arc::new(candidate));
+        *handle.user_id.lock().await = None;
+
+        tracing::info!(camera = %id, "pinned the camera's new certificate at the owner's request");
         self.refresh(&handle).await;
         self.emit(AppEvent::CamerasChanged);
         Ok(self.api(&handle))

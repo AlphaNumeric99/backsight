@@ -21,6 +21,7 @@ import {
 import { StatusPill } from "@/components/camera-status";
 import { useCamera, useUpdateCamera } from "@/queries/cameras";
 import { PlaybackTab } from "@/features/playback/playback-tab";
+import { CertificateNotice } from "./certificate-notice";
 import { LiveTab } from "./live-tab";
 
 type Tab = "live" | "playback";
@@ -108,6 +109,8 @@ export function CameraPage() {
         </TabsList>
         {cam && <CameraMenu camera={cam} />}
       </header>
+
+      {cam?.status.state === "certificate_changed" && <CertificateNotice camera={cam} />}
 
       {cam ? (
         <>

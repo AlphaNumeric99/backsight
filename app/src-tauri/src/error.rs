@@ -59,6 +59,14 @@ impl From<tapo_camera::Error> for ApiError {
                 }
             }
             E::UnsupportedLogin(_) => Self::new("unsupported", message),
+            // Deliberately not retried or auto-trusted: only the owner can tell a firmware
+            // update apart from something impersonating the camera.
+            E::CertificateMismatch { .. } => Self::new(
+                "certificate_changed",
+                "This camera is presenting a different security certificate than when it was \
+                 added. A firmware update or a factory reset causes this; so does another \
+                 machine answering in its place.",
+            ),
             E::Http(http) if http.is_connect() || http.is_timeout() => Self::new(
                 "offline",
                 "The camera didn't answer. Check that it is powered on and on the same network.",

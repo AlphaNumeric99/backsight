@@ -121,6 +121,7 @@ pub fn run() {
             commands::add_qubo_camera,
             commands::update_camera,
             commands::remove_camera,
+            commands::trust_certificate,
             commands::list_groups,
             commands::save_groups,
             commands::get_days_with_recordings,

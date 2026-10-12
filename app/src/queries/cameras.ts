@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api, type AddCameraRequest, type AddQuboCameraRequest, type Camera, type CameraGroup, type CameraId, type UpdateCameraRequest } from "@/ipc";
 import { describeError, toApiError } from "@/lib/errors";
+import { strings } from "@/lib/strings";
 import { queryKeys } from "./keys";
 
 export function useCameras() {
@@ -78,6 +79,25 @@ export function useRemoveCamera() {
     onSuccess: (_, id) => {
       qc.setQueryData<Camera[]>(queryKeys.cameras(), (list) => list?.filter((c) => c.id !== id));
       qc.removeQueries({ queryKey: queryKeys.camera(id), exact: true });
+    },
+  });
+}
+
+/** Pins the certificate a camera presents now, after the owner has chosen to trust it. */
+export function useTrustCertificate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: CameraId) => api.trustCertificate(id),
+    onSuccess: (camera) => {
+      qc.setQueryData<Camera>(queryKeys.camera(camera.id), camera);
+      qc.setQueryData<Camera[]>(queryKeys.cameras(), (list) =>
+        list?.map((c) => (c.id === camera.id ? camera : c)),
+      );
+      toast.success(strings.certificate.trusted, { description: camera.name });
+    },
+    onError: (error) => {
+      const copy = describeError(toApiError(error));
+      toast.error(strings.certificate.failed, { description: copy.body });
     },
   });
 }

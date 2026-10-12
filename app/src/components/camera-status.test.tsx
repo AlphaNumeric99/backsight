@@ -27,6 +27,11 @@ describe("camera status copy", () => {
     expect(describeStatus({ state: "privacy" }, NOW).label).toBe("Privacy mode");
     expect(describeStatus({ state: "auth_failed" }, NOW).label).toBe("Password rejected");
     expect(describeStatus({ state: "unsupported" }, NOW).label).toBe("Not supported");
+    expect(describeStatus({ state: "certificate_changed" }, NOW)).toMatchObject({
+      label: "Security certificate changed",
+      tone: "danger",
+      viewable: false,
+    });
   });
 
   it("renders a pill", () => {

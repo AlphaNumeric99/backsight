@@ -25,6 +25,11 @@ pub enum CameraState {
     Locked,
     AuthFailed,
     Unsupported,
+    /// The camera presented a different TLS certificate than the one pinned when it was
+    /// added, so the connection was refused. A firmware update or a factory reset both
+    /// regenerate the certificate; so does a machine impersonating the camera. The owner
+    /// decides, with `trust_certificate`.
+    CertificateChanged,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -37,6 +42,12 @@ pub struct CameraStatus {
     pub locked_until: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_seen: Option<String>,
+    /// For `certificate_changed`: the fingerprint pinned when the camera was added, and the
+    /// one it presents now, so the UI can show both before the owner decides.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pinned_certificate: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub actual_certificate: Option<String>,
 }
 
 impl CameraStatus {
@@ -46,6 +57,8 @@ impl CameraStatus {
             message: None,
             locked_until: None,
             last_seen: None,
+            pinned_certificate: None,
+            actual_certificate: None,
         }
     }
 }

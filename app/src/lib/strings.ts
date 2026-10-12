@@ -64,6 +64,7 @@ export const strings = {
     lockedShort: "Locked",
     authFailed: "Password rejected",
     unsupported: "Not supported",
+    certificateChanged: "Security certificate changed",
   },
 
   statusDetail: {
@@ -76,6 +77,24 @@ export const strings = {
     authFailed: "The camera rejected the saved password. Update it in Settings.",
     unsupported: "This model or firmware isn't supported yet.",
     connecting: "Connecting to the camera…",
+    certificateChanged:
+      "This camera is presenting a different security certificate than when you added it, so Backsight stopped connecting.",
+  },
+
+  certificate: {
+    title: "This camera's security certificate changed",
+    body: "Backsight pinned the camera's certificate when you added it and checks it on every connection. The camera is now presenting a different one.",
+    expected: "Pinned when added",
+    actual: "Presented now",
+    benign:
+      "A firmware update or a factory reset replaces the certificate, and that is the usual reason for this.",
+    risk:
+      "It would also look like this if something else on your network were answering in the camera's place. If you weren't expecting a firmware update, check the camera in the Tapo app before continuing.",
+    trust: "Trust the new certificate",
+    trusting: "Checking the camera…",
+    trusted: "Pinned the new certificate",
+    failed: "Could not trust the new certificate",
+    verifyNote: "Backsight signs in with your saved password first; it only stores the new certificate if that works.",
   },
 
   relative: {
@@ -242,6 +261,10 @@ export const strings = {
     unsupported: {
       title: "Not supported yet",
       body: "This camera's model or firmware isn't supported yet.",
+    },
+    certificate_changed: {
+      title: "Security certificate changed",
+      body: "Backsight stopped connecting because this camera is presenting a different certificate than when you added it. Open the camera to compare them and decide.",
     },
     not_found: {
       title: "Not found",

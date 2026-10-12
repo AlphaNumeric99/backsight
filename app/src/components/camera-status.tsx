@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Ban, EyeOff, KeyRound, Lock, WifiOff, type LucideIcon } from "lucide-react";
+import { Ban, EyeOff, KeyRound, Lock, ShieldAlert, WifiOff, type LucideIcon } from "lucide-react";
 import type { CameraStatus } from "@/ipc";
 import { cn } from "@/lib/utils";
 import { strings } from "@/lib/strings";
@@ -75,6 +75,14 @@ export function describeStatus(status: CameraStatus, now: number = Date.now()): 
         label: strings.status.unsupported,
         detail: status.message || strings.statusDetail.unsupported,
         icon: Ban,
+        viewable: false,
+      };
+    case "certificate_changed":
+      return {
+        tone: "danger",
+        label: strings.status.certificateChanged,
+        detail: strings.statusDetail.certificateChanged,
+        icon: ShieldAlert,
         viewable: false,
       };
   }

@@ -23,13 +23,24 @@ export type CameraState =
   /** The stored password was rejected. */
   | "auth_failed"
   /** Firmware or model we can't talk to yet. */
-  | "unsupported";
+  | "unsupported"
+  /**
+   * The camera presented a different TLS certificate than the one pinned when it was added,
+   * so the connection was refused. A firmware update or factory reset regenerates it — and so
+   * would another machine answering in its place, which is why only the owner can clear this,
+   * with `trustCertificate`.
+   */
+  | "certificate_changed";
 
 export interface CameraStatus {
   state: CameraState;
   message?: string;
   lockedUntil?: IsoDateTime;
   lastSeen?: IsoDateTime;
+  /** For `certificate_changed`: the fingerprint pinned when the camera was added. */
+  pinnedCertificate?: string;
+  /** For `certificate_changed`: the fingerprint the camera presents now. */
+  actualCertificate?: string;
 }
 
 export type VideoCodecName = "h264" | "h265";
@@ -243,6 +254,7 @@ export type ApiErrorCode =
   | "unsupported"
   | "not_found"
   | "invalid_input"
+  | "certificate_changed"
   | "internal";
 
 /** Shape of every rejected promise from `BacksightApi`. */
@@ -265,6 +277,12 @@ export interface BacksightApi {
   addQuboCamera(req: AddQuboCameraRequest): Promise<Camera>;
   updateCamera(id: CameraId, req: UpdateCameraRequest): Promise<Camera>;
   removeCamera(id: CameraId): Promise<void>;
+  /**
+   * Pins the certificate the camera presents now, replacing the stored one. Only call this
+   * once the owner has seen both fingerprints and chosen to trust the new one; it verifies
+   * the saved password still works before storing anything.
+   */
+  trustCertificate(id: CameraId): Promise<Camera>;
 
   listGroups(): Promise<CameraGroup[]>;
   saveGroups(groups: CameraGroup[]): Promise<void>;
