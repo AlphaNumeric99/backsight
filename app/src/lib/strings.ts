@@ -169,6 +169,8 @@ export const strings = {
     noneFoundBody: "Make sure this computer and your cameras are on the same network, or enter an IP address below.",
     alreadyAdded: "Added",
     notSupported: "Not a camera",
+    newerLogin: "Not supported",
+    newerLoginHelp: "This camera uses TP-Link's newer sign-in, which Backsight can't speak yet.",
     kind: {
       camera: "Camera",
       doorbell: "Doorbell",

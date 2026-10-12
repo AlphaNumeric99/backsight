@@ -308,7 +308,11 @@ function Radar({ active }: { active: boolean }) {
 
 function DeviceRow({ device, onPick }: { device: DiscoveredDevice; onPick: (t: Target) => void }) {
   const Icon = KIND_ICON[device.kind];
-  const supported = device.kind === "camera" || device.kind === "doorbell";
+  const rightKind = device.kind === "camera" || device.kind === "doorbell";
+  // Discovery reports the login generation, so a camera we can't talk to is worth saying so
+  // here rather than after someone has typed their password at it.
+  const unsupportedLogin = device.loginScheme === "tpap";
+  const supported = rightKind && !unsupportedLogin;
   const disabled = device.alreadyAdded || !supported;
   return (
     <button
@@ -335,10 +339,17 @@ function DeviceRow({ device, onPick }: { device: DiscoveredDevice; onPick: (t: T
         <span className="block truncate font-mono text-xs text-fg-3">
           {[device.model, device.host].filter(Boolean).join(" · ")}
         </span>
+        {unsupportedLogin && !device.alreadyAdded && (
+          <span className="mt-0.5 block text-xs text-fg-3">{strings.addCamera.newerLoginHelp}</span>
+        )}
       </span>
       {device.alreadyAdded ? (
         <Badge tone="neutral" size="sm">
           {strings.addCamera.alreadyAdded}
+        </Badge>
+      ) : unsupportedLogin ? (
+        <Badge tone="outline" size="sm">
+          {strings.addCamera.newerLogin}
         </Badge>
       ) : !supported ? (
         <Badge tone="outline" size="sm">

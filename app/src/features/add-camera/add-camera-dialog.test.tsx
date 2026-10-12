@@ -31,6 +31,16 @@ describe("Add camera dialog", () => {
     expect(screen.getByRole("button", { name: /^Tapo Hub/ })).toBeDisabled();
   });
 
+  it("rules out a camera on the newer sign-in before a password is spent on it", async () => {
+    act(() => useUiStore.setState({ addCameraOpen: true }));
+    renderWithProviders(<AddCameraDialog />);
+    // Hallway is a C225 reporting TP-Link's newer login, which we can't speak.
+    const row = await screen.findByRole("button", { name: /^Hallway/ });
+    expect(row).toBeDisabled();
+    expect(row).toHaveTextContent("Not supported");
+    expect(row).toHaveTextContent(/newer sign-in/i);
+  });
+
   it("requires the password", async () => {
     await openAndPick("Kitchen");
     fireEvent.click(screen.getByRole("button", { name: "Add camera" }));
@@ -45,7 +55,8 @@ describe("Add camera dialog", () => {
   });
 
   it("explains Third-Party Compatibility, step by step", async () => {
-    await openAndPick("Hallway");
+    // Any addable camera will do; the mock picks the failure from the password.
+    await openAndPick("Kitchen");
     await submit("compat");
     expect(await screen.findByText("Third-Party Compatibility is off")).toBeInTheDocument();
     expect(screen.getByText("Go to Me → Third-Party Services")).toBeInTheDocument();

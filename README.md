@@ -50,6 +50,8 @@ only offers TP-Link's newer "TPAP" login.
 ## Requirements
 
 - Tapo cameras reachable on your LAN, with an SD card for recordings.
+  **[Will your camera work?](docs/COMPATIBILITY.md)** — it depends on the firmware's sign-in,
+  not the model number, and Backsight tells you when you add it.
 - **Third-Party Compatibility** turned on in the Tapo app (Me → Third-Party Services).
 - The TP-Link account password of the camera's owner. The camera checks it locally.
 - For Qubo: an email/password Qubo account with the camera already set up in the Qubo app,
@@ -65,6 +67,10 @@ only offers TP-Link's newer "TPAP" login.
 
 Exports go to `Videos/Backsight` by default (change it in Settings).
 
+Away from home? Backsight only looks on your local network, but a mesh VPN makes that work
+anywhere with no changes — see **[Watching from somewhere else](docs/REMOTE-ACCESS.md)**.
+Please don't forward ports to a camera.
+
 For Qubo, choose **Add from a Qubo account** in the add-camera dialog, sign in, and pick
 a camera. The same Live and Multi-view players display its feed. The observed access-token
 lifetime is one hour and refresh-token lifetime is 180 days; the backend reads the token's
@@ -79,7 +85,7 @@ expiry and refreshes before it expires. Revocation can require signing in again 
 | `crates/tapo-mock` | A fake camera (login, API, media stream) for tests and development |
 | `app/` | The Tauri 2 desktop app (Rust backend in `app/src-tauri`, React UI in `app/src`) |
 | `app/src-tauri/src/qubo/` | Qubo cloud account, signed live tickets, RTSPS and RTP video depacketization |
-| `docs/` | [Architecture](docs/ARCHITECTURE.md): contracts, wire format, camera constraints |
+| `docs/` | [Compatibility](docs/COMPATIBILITY.md), [remote access](docs/REMOTE-ACCESS.md), and the [architecture](docs/ARCHITECTURE.md) |
 
 ## Development
 
