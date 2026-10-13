@@ -36,6 +36,12 @@ npm install
 npm run tauri dev
 ```
 
+To build the app itself, use the Tauri CLI — `npm run tauri build` (add `--no-bundle` for
+just the executable). `cargo build --release` is not the same thing: it leaves the `tauri`
+crate's `custom-protocol` feature off, which drops the frontend from the binary and leaves
+the window pointing at the dev server, so the app opens on "localhost refused to connect".
+`build.rs` stops that build with a message rather than letting you find out at launch.
+
 You don't need a camera to work on most of this:
 
 - `npm run dev` in `app/` runs the UI in a normal browser against in-memory mock cameras, with
