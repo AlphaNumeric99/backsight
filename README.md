@@ -73,7 +73,8 @@ Exports go to `Videos/Backsight` by default (change it in Settings).
 
 Away from home? Backsight only looks on your local network, but a mesh VPN makes that work
 anywhere with no changes — see **[Watching from somewhere else](docs/REMOTE-ACCESS.md)**.
-Please don't forward ports to a camera.
+Please don't forward ports to a camera. The longer-term answer, which asks nothing of the
+client, is sketched in **[the home agent design](docs/HOME-AGENT.md)**.
 
 For Qubo, choose **Add from a Qubo account** in the add-camera dialog, sign in, and pick
 a camera. The same Live and Multi-view players display its feed. The observed access-token
@@ -89,7 +90,7 @@ expiry and refreshes before it expires. Revocation can require signing in again 
 | `crates/tapo-mock` | A fake camera (login, API, media stream) for tests and development |
 | `app/` | The Tauri 2 desktop app (Rust backend in `app/src-tauri`, React UI in `app/src`) |
 | `app/src-tauri/src/qubo/` | Qubo cloud account, signed live tickets, RTSPS and RTP video depacketization |
-| `docs/` | [Compatibility](docs/COMPATIBILITY.md), [remote access](docs/REMOTE-ACCESS.md), and the [architecture](docs/ARCHITECTURE.md) |
+| `docs/` | [Compatibility](docs/COMPATIBILITY.md), [remote access](docs/REMOTE-ACCESS.md), the [home agent design](docs/HOME-AGENT.md), and the [architecture](docs/ARCHITECTURE.md) |
 
 ## Development
 
